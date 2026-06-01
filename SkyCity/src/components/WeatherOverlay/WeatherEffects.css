@@ -1,0 +1,71 @@
+.rain-of-light {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 6;
+}
+
+.light-drop {
+  position: absolute;
+  top: -20px;
+  width: 1px;
+  height: 50px;
+  background: linear-gradient(to bottom, transparent, var(--accent-blue));
+  opacity: 0.6;
+  filter: blur(1px);
+  animation: rainDown linear infinite;
+}
+
+@keyframes rainDown {
+  to { transform: translateY(110vh); }
+}
+
+.static-discharge {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+  overflow: hidden;
+}
+
+.bolt {
+  position: absolute;
+  background: #fff;
+  opacity: 0;
+  filter: blur(2px) drop-shadow(0 0 15px var(--accent-blue));
+}
+
+.bolt-horizontal {
+  width: 100%;
+  height: 2px;
+  top: 30%;
+  animation: boltFlicker 8s infinite;
+}
+
+.bolt-vertical {
+  width: 2px;
+  height: 100%;
+  left: 60%;
+  animation: boltFlicker 12s infinite 2s;
+}
+
+.vignette-flicker {
+  position: absolute;
+  inset: 0;
+  box-shadow: inset 0 0 100px #000;
+  animation: stormVignette 5s infinite;
+}
+
+@keyframes boltFlicker {
+  0%, 95%, 100% { opacity: 0; transform: scaleX(0); }
+  96% { opacity: 1; transform: scaleX(1); }
+  97% { opacity: 0; }
+  98% { opacity: 1; }
+}
+
+@keyframes stormVignette {
+  0%, 100% { opacity: 0.3; }
+  95% { opacity: 0.8; }
+  96% { opacity: 0.2; }
+}

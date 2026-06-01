@@ -1,0 +1,24 @@
+{
+  "historical_timeline": [
+    { "year": "01", "event": "Gravity Core Alpha Ignited" },
+    { "year": "120", "event": "Apex CBD Completed" },
+    { "year": "210", "event": "Ether Efficiency Breakthrough" },
+    { "year": "315", "event": "Observer Protocol Active" }
+  ],
+  "notable_residents": [
+    { "id": "lin-mo", "name": "Lin Mo", "role": "Chief Architect", "district": "apex" },
+    { "id": "jax", "name": "Jax", "role": "Rebel Mechanic", "district": "foundation" }
+  ],
+  "citizen_posts": [
+    { "user": "VoidWatcher", "content": "Did the sky just... ripple? Near the Foundation thermal vents. It looked like a giant eye opening in the clouds.", "tension": "high" },
+    { "user": "Drift_Mechanic", "content": "Gravity Core B-4 is making that 'heartbeat' sound again. Engineering says it's fine, but my coffee is pulsing in the cup.", "tension": "high" },
+    { "user": "Aero_Lover", "content": "Anyone else see the shadow? It must have been 500 meters long. It passed right under the Mid-Ring transit line.", "tension": "critical" },
+    { "user": "Sky_Skeptic", "content": "The Council just issued a 'Level 2 Atmospheric Disturbance' warning. They never do that. Stay indoors, people.", "tension": "medium" },
+    { "user": "Echo_Jumper", "content": "I heard a song. Not a bird, not a machine. A deep, low-frequency hum coming from the Abyss. It felt like it was inside my head.", "tension": "high" },
+    { "user": "Cloud_Mapper", "content": "My sensors just picked up a biological mass larger than a satellite island. It's moving upwards. FAST.", "tension": "critical" },
+    { "user": "Neon_Ghost", "content": "Shadow Ministry agents spotted at the East Docks. They're confiscating all long-range telescopes. What are they hiding?", "tension": "high" },
+    { "user": "Vapor_Hiker", "content": "The 'Wind Whales' aren't friendly. I saw one breach the cloud layer. It didn't have skin, it had... scales of pure light.", "tension": "high" },
+    { "user": "Zero_G_Fan", "content": "Emergency lockdown in Sector 7! The ground just tilted by 3 degrees. I think the anchors are slipping.", "tension": "critical" },
+    { "user": "Last_Observer", "content": "If you see the Abyss Whale, do not blink. It's not looking at the city. It's looking at YOU.", "tension": "critical" }
+  ]
+}

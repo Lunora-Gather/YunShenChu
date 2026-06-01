@@ -1,0 +1,117 @@
+{
+  "city_name": "云深处 (The Deep Cloud)",
+  "version": "1.3.0",
+  "last_updated": "2026-06-25",
+  "global_stats": {
+    "total_population": 1250000,
+    "average_altitude": 5350,
+    "energy_index": 98.5,
+    "status": "Stable"
+  },
+  "weather": {
+    "current_condition": "Clear Sky with Ion Clouds",
+    "humidity": 42,
+    "wind_speed": 12,
+    "temperature": 18
+  },
+  "traffic_system": {
+    "active_routes": 142,
+    "density": "Moderate",
+    "status": "Operational"
+  },
+  "districts": [
+    {
+      "id": "apex",
+      "name": "上环·凌霄",
+      "altitude_range": [5800, 6200],
+      "coordinates": { "x": 0, "y": 0, "z": 6000 },
+      "description": "城市的行政与金融中枢，云海之上的透明殿堂。",
+      "landmarks": [
+        { "name": "云端枢纽", "type": "Administrative", "status": "Active" },
+        { "name": "以太研究所", "type": "Research", "status": "Active" },
+        { "name": "星辰礼堂", "type": "Cultural", "status": "Active" },
+        { "name": "零重力塔", "type": "Observation", "status": "Active" },
+        { "name": "静谧之巅", "type": "Residential", "status": "Exclusive" },
+        { "name": "光流长廊", "type": "Commercial", "status": "Busy" },
+        { "name": "以太庭院", "type": "Laboratory", "status": "Secure" },
+        { "name": "议会圆桌", "type": "Government", "status": "Restricted" }
+      ],
+      "residents": ["林墨 (Lin Mo)", "凯尔长老 (Elder Kael)", "塞拉 (Sela)"],
+      "visual_style": "High-Transparency Glass, Silver Accents",
+      "social_metrics": {
+        "happiness": 85,
+        "education": 98,
+        "productivity": 95
+      }
+    },
+    {
+      "id": "mid_ring",
+      "name": "中环·烟火",
+      "altitude_range": [5000, 5500],
+      "coordinates": { "x": 200, "y": -150, "z": 5250 },
+      "description": "繁华的商业与居住带，连接万家的流光长廊。",
+      "landmarks": [
+        { "name": "浮光市集", "type": "Commercial", "status": "Busy" },
+        { "name": "垂直社区-A1", "type": "Residential", "status": "Occupied" },
+        { "name": "虹吸公园", "type": "Recreational", "status": "Active" },
+        { "name": "霓虹广场", "type": "Social Hub", "status": "Lively" },
+        { "name": "霓虹里", "type": "Entertainment", "status": "Active" },
+        { "name": "模块之林", "type": "Residential", "status": "Stable" },
+        { "name": "艺术家斜角", "type": "Cultural", "status": "Creative" },
+        { "name": "流光轨道枢纽", "type": "Transport", "status": "Optimal" }
+      ],
+      "residents": ["艾莉亚 (Aria)"],
+      "visual_style": "Warm Neon, Modular Greenery",
+      "social_metrics": {
+        "happiness": 92,
+        "education": 88,
+        "productivity": 82
+      }
+    },
+    {
+      "id": "foundation",
+      "name": "下环·根基",
+      "altitude_range": [4500, 4800],
+      "coordinates": { "x": -100, "y": 300, "z": 4650 },
+      "description": "维持城市运转的钢铁心脏，重力与水资源的源泉。",
+      "landmarks": [
+        { "name": "天枢引擎房", "type": "Energy", "status": "Critical" },
+        { "name": "捕云塔群", "type": "Infrastructure", "status": "Optimal" },
+        { "name": "废金属回收站", "type": "Industrial", "status": "Active" },
+        { "name": "深渊维护井", "type": "Maintenance", "status": "Standby" },
+        { "name": "重力蓝光区", "type": "Industrial", "status": "Hazardous" },
+        { "name": "捕水走廊", "type": "Resource", "status": "Optimal" },
+        { "name": "回收站平民窟", "type": "Residential", "status": "Active" },
+        { "name": "冷却塔B-4", "type": "Energy", "status": "Active" }
+      ],
+      "residents": ["杰克斯 (Jax)"],
+      "visual_style": "Heavy Metal, Cyan Energy Glow",
+      "social_metrics": {
+        "happiness": 78,
+        "education": 82,
+        "productivity": 98
+      }
+    }
+  ],
+  "key_residents": [
+    { "name": "林墨 (Lin Mo)", "role": "Chief Architect", "district": "apex" },
+    { "name": "塞拉 (Sela)", "role": "Cloud-Watcher", "district": "apex" },
+    { "name": "杰克斯 (Jax)", "role": "Rebel Mechanic", "district": "foundation" },
+    { "name": "艾莉亚 (Aria)", "role": "Nectar Merchant", "district": "mid_ring" },
+    { "name": "凯尔长老 (Elder Kael)", "role": "High Council Member", "district": "apex" }
+  ],
+  "transport_network": {
+    "active_lines": ["Line-Alpha", "Line-Beta", "Line-Gamma", "Line-Delta"],
+    "status": "Operational"
+  },
+  "historical_timeline": [
+    { "year": "01", "event": "Gravity Core Alpha Ignited" },
+    { "year": "12", "event": "First Pioneers Settled" },
+    { "year": "45", "event": "Cloud Siphon Self-Sufficiency Achieved" },
+    { "year": "120", "event": "Apex CBD Completed" },
+    { "year": "155", "event": "Light-Rail Network Fully Operational" },
+    { "year": "210", "event": "Ether Efficiency Breakthrough" },
+    { "year": "280", "event": "The Great Gravity Pulse Incident" },
+    { "year": "315", "event": "Observer Protocol Active" }
+  ]
+}

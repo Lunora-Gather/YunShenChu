@@ -1,0 +1,60 @@
+.chronicle-container {
+  margin-top: 20px;
+  padding: 15px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.chronicle-title {
+  margin: 0 0 14px;
+  color: var(--text-primary);
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+
+.chronicle-track {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: relative;
+  padding-left: 10px;
+}
+
+.chronicle-track::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 5px;
+  bottom: 5px;
+  width: 1px;
+  background: rgba(0, 210, 255, 0.2);
+}
+
+.chronicle-item {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  font-size: 11px;
+}
+
+.chronicle-year {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--accent-blue);
+  width: 45px;
+  font-weight: bold;
+}
+
+.chronicle-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--accent-blue);
+  border-radius: 50%;
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 0 8px var(--accent-blue);
+}
+
+.chronicle-event {
+  color: var(--text-secondary);
+}

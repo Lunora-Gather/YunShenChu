@@ -1,0 +1,22 @@
+[
+  {
+    "id": "foundation",
+    "name": "下环·根基 [PROTOTYPE]",
+    "altitude_range": [4500, 4800],
+    "coordinates": { "x": 0, "y": 0, "z": 4650 },
+    "description": "最初的定居点。唯一的稳定平台，周围充满了施工架和外露的导线。",
+    "landmarks": [
+      { "name": "天枢引擎房 (Mk-I)", "type": "Energy", "status": "Testing" },
+      { "name": "基础捕云器", "type": "Infrastructure", "status": "Active" },
+      { "name": "核心居住舱", "type": "Residential", "status": "Crowded" }
+    ],
+    "visual_style": "Exposed Piping, Rust, High Contrast",
+    "security_level": "None",
+    "dominant_faction": "The Founders",
+    "social_metrics": {
+      "happiness": 45,
+      "education": 60,
+      "productivity": 100
+    }
+  }
+]

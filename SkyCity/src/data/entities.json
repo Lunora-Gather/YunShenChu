@@ -1,0 +1,12 @@
+{
+  "historical_timeline": [
+    { "year": "01", "event": "Gravity Core Alpha Ignited" },
+    { "year": "120", "event": "Apex CBD Completed" },
+    { "year": "210", "event": "Ether Efficiency Breakthrough" },
+    { "year": "315", "event": "Observer Protocol Active" }
+  ],
+  "notable_residents": [
+    { "id": "lin-mo", "name": "Lin Mo", "role": "Chief Architect", "district": "apex" },
+    { "id": "jax", "name": "Jax", "role": "Rebel Mechanic", "district": "foundation" }
+  ]
+}

@@ -1,0 +1,59 @@
+[
+  {
+    "id": "apex",
+    "name": "上环·凌霄",
+    "altitude_range": [5800, 6200],
+    "coordinates": { "x": 0, "y": 0, "z": 6000 },
+    "description": "城市的行政与金融中枢，云海之上的透明殿堂。",
+    "landmarks": [
+      { "name": "云端枢纽", "type": "Administrative", "status": "Active" },
+      { "name": "以太研究所", "type": "Research", "status": "Active" },
+      { "name": "星辰礼堂", "type": "Cultural", "status": "Active" },
+      { "name": "零重力塔", "type": "Observation", "status": "Active" }
+    ],
+    "visual_style": "High-Transparency Glass, Silver Accents",
+    "social_metrics": {
+      "happiness": 85,
+      "education": 98,
+      "productivity": 95
+    }
+  },
+  {
+    "id": "mid_ring",
+    "name": "中环·烟火",
+    "altitude_range": [5000, 5500],
+    "coordinates": { "x": 200, "y": -150, "z": 5250 },
+    "description": "繁华的商业与居住带，连接万家的流光长廊。",
+    "landmarks": [
+      { "name": "浮光市集", "type": "Commercial", "status": "Busy" },
+      { "name": "垂直社区-A1", "type": "Residential", "status": "Occupied" },
+      { "name": "虹吸公园", "type": "Recreational", "status": "Active" },
+      { "name": "霓虹广场", "type": "Social Hub", "status": "Lively" }
+    ],
+    "visual_style": "Warm Neon, Modular Greenery",
+    "social_metrics": {
+      "happiness": 92,
+      "education": 88,
+      "productivity": 82
+    }
+  },
+  {
+    "id": "foundation",
+    "name": "下环·根基",
+    "altitude_range": [4500, 4800],
+    "coordinates": { "x": -100, "y": 300, "z": 4650 },
+    "description": "维持城市运转的钢铁心脏，重力与水资源的源泉。",
+    "landmarks": [
+      { "name": "天枢引擎房", "type": "Energy", "status": "Critical" },
+      { "name": "捕云塔群", "type": "Infrastructure", "status": "Optimal" },
+      { "name": "废金属回收站", "type": "Industrial", "status": "Active" },
+      { "name": "深渊维护井", "type": "Maintenance", "status": "Standby" }
+    ],
+    "visual_style": "Heavy Metal, Cyan Energy Glow",
+    "social_metrics": {
+      "happiness": 78,
+      "education": 82,
+      "productivity": 98
+    }
+  }
+]

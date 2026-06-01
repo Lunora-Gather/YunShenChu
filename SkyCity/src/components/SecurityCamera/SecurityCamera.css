@@ -1,0 +1,188 @@
+.security-camera-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9999;
+  pointer-events: none;
+  background-color: rgba(0, 20, 0, 0.85);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 40px;
+  box-sizing: border-box;
+  color: #4ade80; /* green tint text */
+  font-family: 'Courier New', Courier, monospace;
+  text-shadow: 0 0 5px #4ade80;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.security-camera-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* scanlines */
+.security-camera-overlay::before {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+  z-index: 2;
+  background-size: 100% 2px, 3px 100%;
+  pointer-events: none;
+}
+
+/* noise */
+.security-camera-overlay::after {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  right: -50%;
+  bottom: -50%;
+  width: 200%;
+  height: 200%;
+  background: transparent url('data:image/svg+xml,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noiseFilter"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noiseFilter)"/%3E%3C/svg%3E');
+  opacity: 0.15;
+  z-index: 1;
+  pointer-events: none;
+  animation: cameraNoise 0.2s infinite;
+}
+
+@keyframes cameraNoise {
+  0% { transform: translate(0, 0); }
+  10% { transform: translate(-5%, -5%); }
+  20% { transform: translate(-10%, 5%); }
+  30% { transform: translate(5%, -10%); }
+  40% { transform: translate(-5%, 15%); }
+  50% { transform: translate(-10%, 5%); }
+  60% { transform: translate(15%, 0); }
+  70% { transform: translate(0, 15%); }
+  80% { transform: translate(3%, 35%); }
+  90% { transform: translate(-10%, 10%); }
+  100% { transform: translate(0, 0); }
+}
+
+.camera-header {
+  display: flex;
+  justify-content: space-between;
+  z-index: 3;
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.rec-indicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rec-dot {
+  width: 16px;
+  height: 16px;
+  background-color: red;
+  border-radius: 50%;
+  animation: cameraRecBlink 1s infinite;
+}
+
+@keyframes cameraRecBlink {
+  0% { opacity: 1; }
+  50% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+.camera-footer {
+  display: flex;
+  justify-content: space-between;
+  z-index: 3;
+  font-size: 20px;
+  border-top: 2px solid rgba(74, 222, 128, 0.5);
+  padding-top: 10px;
+}
+
+.camera-feed-content {
+  flex-grow: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+  font-size: 18px;
+  opacity: 0.5;
+  letter-spacing: 5px;
+}
+
+.camera-inner {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: -1;
+  background-color: transparent;
+  animation: cameraPulseGreen 4s infinite alternate;
+}
+
+@keyframes cameraPulseGreen {
+  0% { box-shadow: inset 0 0 50px rgba(0, 255, 0, 0.1); }
+  100% { box-shadow: inset 0 0 100px rgba(0, 255, 0, 0.2); }
+}
+
+.close-camera-btn {
+  position: absolute;
+  top: 40px;
+  right: 40px;
+  background: transparent;
+  border: 1px solid #4ade80;
+  color: #4ade80;
+  padding: 5px 15px;
+  cursor: pointer;
+  z-index: 10;
+  font-family: inherit;
+  font-size: 16px;
+}
+.close-camera-btn:hover {
+  background: rgba(74, 222, 128, 0.2);
+}
+
+.close-camera-btn:focus-visible {
+  outline: 2px solid #4ade80;
+  outline-offset: 3px;
+}
+
+@media (max-width: 680px) {
+  .security-camera-overlay {
+    padding: 22px;
+  }
+
+  .camera-header {
+    padding-right: 72px;
+    font-size: 16px;
+    gap: 14px;
+  }
+
+  .camera-footer {
+    font-size: 12px;
+    gap: 14px;
+  }
+
+  .camera-feed-content {
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-align: center;
+  }
+
+  .close-camera-btn {
+    top: 22px;
+    right: 22px;
+    padding: 4px 10px;
+    font-size: 12px;
+  }
+}

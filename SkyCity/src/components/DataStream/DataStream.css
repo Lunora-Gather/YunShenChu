@@ -1,0 +1,28 @@
+.data-stream-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: space-around;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.15;
+}
+
+.data-column {
+  display: flex;
+  flex-direction: column;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  color: var(--accent-blue);
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  animation: streamMove 10s linear infinite;
+}
+
+@keyframes streamMove {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(100vh); }
+}
