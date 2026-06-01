@@ -99,10 +99,10 @@
 
 .terminal-body {
   flex: 1;
-  padding: 20px;
+  padding: 18px 20px 16px;
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 12px;
   overflow: hidden;
   transition: opacity 0.3s;
 }
@@ -125,7 +125,7 @@
   font-size: 13px;
   line-height: 1.5;
   white-space: pre-wrap;
-  word-break: break-all;
+  overflow-wrap: anywhere;
   text-shadow: 0 0 5px rgba(74, 222, 128, 0.3);
 }
 
@@ -140,6 +140,39 @@
 
 .terminal-line.error {
   color: var(--accent-red);
+}
+
+.terminal-quick-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.terminal-quick-actions button {
+  min-height: 28px;
+  border: 1px solid rgba(74, 222, 128, 0.2);
+  border-radius: 4px;
+  background: rgba(74, 222, 128, 0.055);
+  color: rgba(144, 255, 181, 0.78);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.terminal-quick-actions button:hover:not(:disabled),
+.terminal-quick-actions button:focus-visible {
+  border-color: rgba(74, 222, 128, 0.6);
+  color: var(--accent-green);
+  background: rgba(74, 222, 128, 0.12);
+  outline: none;
+}
+
+.terminal-quick-actions button:disabled {
+  cursor: wait;
+  opacity: 0.42;
 }
 
 .typing-cursor {
@@ -251,5 +284,9 @@
 
   .terminal-title {
     font-size: 10px;
+  }
+
+  .terminal-quick-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

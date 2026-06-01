@@ -1,60 +1,421 @@
 .security-camera-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
+  inset: 0;
   z-index: 9999;
-  pointer-events: none;
-  background-color: rgba(0, 20, 0, 0.85);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 40px;
-  box-sizing: border-box;
-  color: #4ade80; /* green tint text */
-  font-family: 'Courier New', Courier, monospace;
-  text-shadow: 0 0 5px #4ade80;
+  padding: 38px;
   overflow: hidden;
-  opacity: 0;
-  transition: opacity 0.3s;
-}
-
-.security-camera-overlay.active {
+  color: #dffcff;
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  text-shadow: 0 0 9px rgba(65, 241, 214, 0.48);
+  background:
+    radial-gradient(circle at 50% 44%, rgba(0, 200, 255, 0.18), transparent 34%),
+    linear-gradient(180deg, rgba(0, 10, 20, 0.74), rgba(0, 0, 0, 0.92));
   opacity: 1;
-  pointer-events: auto;
 }
 
-/* scanlines */
 .security-camera-overlay::before {
-  content: " ";
-  display: block;
+  content: "";
   position: absolute;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  right: 0;
-  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
-  z-index: 2;
-  background-size: 100% 2px, 3px 100%;
+  inset: 0;
+  z-index: 5;
   pointer-events: none;
+  background:
+    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.24) 50%),
+    linear-gradient(90deg, rgba(255, 0, 0, 0.05), rgba(0, 255, 0, 0.025), rgba(0, 0, 255, 0.05));
+  background-size: 100% 3px, 4px 100%;
 }
 
-/* noise */
 .security-camera-overlay::after {
   content: "";
   position: absolute;
-  top: -50%;
-  left: -50%;
-  right: -50%;
-  bottom: -50%;
-  width: 200%;
-  height: 200%;
+  inset: -50%;
+  z-index: 4;
+  pointer-events: none;
+  opacity: 0.14;
   background: transparent url('data:image/svg+xml,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noiseFilter"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noiseFilter)"/%3E%3C/svg%3E');
-  opacity: 0.15;
+  animation: cameraNoise 0.22s infinite;
+}
+
+.camera-feed-apex {
+  background:
+    radial-gradient(circle at 50% 38%, rgba(214, 244, 255, 0.2), transparent 34%),
+    linear-gradient(180deg, rgba(2, 18, 32, 0.78), rgba(0, 0, 0, 0.94));
+}
+
+.camera-feed-mid_ring {
+  background:
+    radial-gradient(circle at 44% 48%, rgba(255, 189, 104, 0.22), transparent 34%),
+    linear-gradient(180deg, rgba(18, 12, 21, 0.78), rgba(0, 0, 0, 0.94));
+}
+
+.camera-feed-foundation {
+  background:
+    radial-gradient(circle at 50% 56%, rgba(103, 242, 154, 0.18), transparent 30%),
+    linear-gradient(180deg, rgba(0, 21, 24, 0.76), rgba(0, 0, 0, 0.96));
+}
+
+.camera-inner {
+  position: absolute;
+  inset: 0;
   z-index: 1;
   pointer-events: none;
-  animation: cameraNoise 0.2s infinite;
+  box-shadow: inset 0 0 76px rgba(0, 200, 255, 0.18), inset 0 0 180px rgba(0, 0, 0, 0.48);
+  animation: cameraPulse 4s ease-in-out infinite alternate;
+}
+
+.camera-reticle {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.camera-reticle span {
+  position: absolute;
+  border: 1px solid rgba(65, 241, 214, 0.28);
+}
+
+.camera-reticle span:nth-child(1) {
+  left: 50%;
+  top: 18%;
+  bottom: 18%;
+  width: 1px;
+}
+
+.camera-reticle span:nth-child(2) {
+  top: 50%;
+  left: 18%;
+  right: 18%;
+  height: 1px;
+}
+
+.camera-reticle span:nth-child(3) {
+  left: 50%;
+  top: 50%;
+  width: min(460px, 62vw);
+  height: min(260px, 36vw);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+}
+
+.camera-header,
+.camera-footer,
+.close-camera-btn,
+.camera-feed-content {
+  position: relative;
+  z-index: 8;
+}
+
+.camera-header {
+  display: grid;
+  grid-template-columns: 150px 1fr 86px;
+  align-items: start;
+  gap: 18px;
+  font-weight: 900;
+}
+
+.rec-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #ff665a;
+  font-size: 22px;
+}
+
+.rec-dot {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background-color: #ff2f22;
+  box-shadow: 0 0 16px rgba(255, 47, 34, 0.72);
+  animation: cameraRecBlink 1s infinite;
+}
+
+.camera-title {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  text-align: center;
+}
+
+.camera-title span {
+  color: rgba(223, 252, 255, 0.7);
+  font-size: 12px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+}
+
+.camera-title strong {
+  color: #ffffff;
+  font-size: clamp(18px, 2.5vw, 30px);
+  letter-spacing: 2px;
+}
+
+.close-camera-btn {
+  position: absolute;
+  top: 38px;
+  right: 38px;
+  min-height: 34px;
+  padding: 6px 14px;
+  border: 1px solid rgba(65, 241, 214, 0.76);
+  border-radius: 4px;
+  background: rgba(0, 12, 18, 0.64);
+  color: #8fffee;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.close-camera-btn:hover {
+  background: rgba(65, 241, 214, 0.14);
+}
+
+.close-camera-btn:focus-visible {
+  outline: 2px solid #ffbd68;
+  outline-offset: 3px;
+}
+
+.camera-feed-content {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: 28px 0;
+}
+
+.camera-feed-stage {
+  position: relative;
+  width: min(860px, 82vw);
+  height: min(430px, 46vh);
+  min-height: 270px;
+  overflow: hidden;
+  border: 1px solid rgba(65, 241, 214, 0.22);
+  border-radius: 8px;
+  background:
+    linear-gradient(rgba(65, 241, 214, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(65, 241, 214, 0.04) 1px, transparent 1px),
+    radial-gradient(circle at 50% 68%, rgba(65, 241, 214, 0.13), transparent 42%),
+    rgba(0, 0, 0, 0.2);
+  background-size: 36px 36px, 36px 36px, auto, auto;
+  box-shadow: inset 0 0 42px rgba(0, 0, 0, 0.44), 0 0 40px rgba(65, 241, 214, 0.08);
+}
+
+.camera-feed-stage > span {
+  position: absolute;
+  display: block;
+}
+
+.camera-horizon {
+  left: 8%;
+  right: 8%;
+  top: 42%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(223, 252, 255, 0.74), transparent);
+}
+
+.camera-platform {
+  left: 50%;
+  top: 53%;
+  width: min(360px, 54vw);
+  height: min(150px, 22vh);
+  transform: translate(-50%, -50%) perspective(460px) rotateX(62deg);
+  border: 2px solid rgba(65, 241, 214, 0.58);
+  border-radius: 42%;
+  background: radial-gradient(circle, rgba(65, 241, 214, 0.14), transparent 64%);
+  box-shadow: 0 0 42px rgba(65, 241, 214, 0.18);
+}
+
+.camera-spire {
+  bottom: 43%;
+  width: 22px;
+  border: 1px solid rgba(223, 252, 255, 0.58);
+  border-bottom: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(65, 241, 214, 0.1));
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.spire-a {
+  left: 42%;
+  height: 180px;
+}
+
+.spire-b {
+  left: 50%;
+  height: 240px;
+  transform: translateX(-50%);
+}
+
+.spire-c {
+  right: 42%;
+  height: 140px;
+}
+
+.camera-route {
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(255, 189, 104, 0.78), transparent);
+  box-shadow: 0 0 18px rgba(255, 189, 104, 0.32);
+}
+
+.route-a {
+  left: 18%;
+  right: 18%;
+  top: 62%;
+  transform: rotate(-8deg);
+  animation: cameraRouteSweep 4s linear infinite;
+}
+
+.route-b {
+  left: 24%;
+  right: 24%;
+  top: 34%;
+  opacity: 0.62;
+  transform: rotate(11deg);
+  animation: cameraRouteSweep 5.4s linear infinite reverse;
+}
+
+.camera-core {
+  left: 50%;
+  top: 52%;
+  width: 74px;
+  height: 74px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 1px solid rgba(103, 242, 154, 0.7);
+  background: radial-gradient(circle, rgba(103, 242, 154, 0.34), transparent 62%);
+  opacity: 0.72;
+  animation: cameraCoreBeat 2.4s ease-in-out infinite;
+}
+
+.camera-cloud {
+  bottom: 6%;
+  width: 44%;
+  height: 24%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.16), transparent 68%);
+  filter: blur(10px);
+}
+
+.cloud-a {
+  left: 2%;
+}
+
+.cloud-b {
+  right: 0;
+  bottom: 12%;
+}
+
+.camera-feed-apex .camera-core,
+.camera-feed-apex .camera-platform {
+  border-color: rgba(214, 244, 255, 0.72);
+}
+
+.camera-feed-mid_ring .camera-route {
+  background: linear-gradient(90deg, transparent, rgba(255, 128, 212, 0.8), rgba(255, 189, 104, 0.72), transparent);
+}
+
+.camera-feed-foundation .camera-spire {
+  background: linear-gradient(180deg, rgba(103, 242, 154, 0.72), rgba(0, 0, 0, 0.12));
+}
+
+.camera-anomaly {
+  left: 50%;
+  top: 50%;
+  width: 190px;
+  height: 190px;
+  transform: translate(-50%, -50%);
+  border: 1px dashed rgba(255, 189, 104, 0.82);
+  border-radius: 50%;
+  box-shadow: 0 0 54px rgba(255, 189, 104, 0.22);
+  animation: cameraAnomaly 2.6s ease-in-out infinite;
+}
+
+.anomaly-guixu {
+  top: 67%;
+  width: 230px;
+  height: 108px;
+  border-radius: 48%;
+}
+
+.anomaly-ghost-rail {
+  width: 76%;
+  height: 16px;
+  border-radius: 999px;
+  transform: translate(-50%, -50%) rotate(-11deg);
+}
+
+.anomaly-core {
+  border-color: rgba(103, 242, 154, 0.88);
+}
+
+.anomaly-observer {
+  width: 280px;
+  height: 280px;
+  border-style: solid;
+}
+
+.anomaly-abyss {
+  top: 74%;
+  width: 68%;
+  height: 120px;
+  border-color: rgba(65, 241, 214, 0.78);
+}
+
+.camera-caption {
+  position: absolute;
+  left: 50%;
+  bottom: 92px;
+  z-index: 9;
+  width: min(620px, calc(100vw - 76px));
+  transform: translateX(-50%);
+  display: grid;
+  gap: 7px;
+  padding: 12px 14px;
+  border: 1px solid rgba(65, 241, 214, 0.22);
+  border-radius: 8px;
+  background: rgba(0, 8, 14, 0.72);
+  backdrop-filter: blur(12px);
+  text-align: center;
+}
+
+.camera-caption span {
+  color: #ffbd68;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1.4px;
+}
+
+.camera-caption strong {
+  font-size: clamp(14px, 2vw, 22px);
+  color: white;
+}
+
+.camera-caption small {
+  color: rgba(223, 252, 255, 0.68);
+  line-height: 1.45;
+}
+
+.camera-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding-top: 12px;
+  border-top: 2px solid rgba(65, 241, 214, 0.34);
+  color: rgba(223, 252, 255, 0.84);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.camera-telemetry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 @keyframes cameraNoise {
@@ -71,118 +432,101 @@
   100% { transform: translate(0, 0); }
 }
 
-.camera-header {
-  display: flex;
-  justify-content: space-between;
-  z-index: 3;
-  font-size: 24px;
-  font-weight: bold;
-}
-
-.rec-indicator {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.rec-dot {
-  width: 16px;
-  height: 16px;
-  background-color: red;
-  border-radius: 50%;
-  animation: cameraRecBlink 1s infinite;
-}
-
 @keyframes cameraRecBlink {
-  0% { opacity: 1; }
-  50% { opacity: 0; }
-  100% { opacity: 1; }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.22; }
 }
 
-.camera-footer {
-  display: flex;
-  justify-content: space-between;
-  z-index: 3;
-  font-size: 20px;
-  border-top: 2px solid rgba(74, 222, 128, 0.5);
-  padding-top: 10px;
+@keyframes cameraPulse {
+  0% { box-shadow: inset 0 0 60px rgba(0, 200, 255, 0.12), inset 0 0 160px rgba(0, 0, 0, 0.54); }
+  100% { box-shadow: inset 0 0 100px rgba(65, 241, 214, 0.22), inset 0 0 210px rgba(0, 0, 0, 0.48); }
 }
 
-.camera-feed-content {
-  flex-grow: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 3;
-  font-size: 18px;
-  opacity: 0.5;
-  letter-spacing: 5px;
+@keyframes cameraRouteSweep {
+  0% { opacity: 0.24; filter: brightness(0.8); }
+  50% { opacity: 0.9; filter: brightness(1.35); }
+  100% { opacity: 0.24; filter: brightness(0.8); }
 }
 
-.camera-inner {
-  width: 100%;
-  height: 100%;
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: -1;
-  background-color: transparent;
-  animation: cameraPulseGreen 4s infinite alternate;
+@keyframes cameraCoreBeat {
+  0%, 100% { transform: translate(-50%, -50%) scale(0.9); opacity: 0.48; }
+  50% { transform: translate(-50%, -50%) scale(1.12); opacity: 0.9; }
 }
 
-@keyframes cameraPulseGreen {
-  0% { box-shadow: inset 0 0 50px rgba(0, 255, 0, 0.1); }
-  100% { box-shadow: inset 0 0 100px rgba(0, 255, 0, 0.2); }
-}
-
-.close-camera-btn {
-  position: absolute;
-  top: 40px;
-  right: 40px;
-  background: transparent;
-  border: 1px solid #4ade80;
-  color: #4ade80;
-  padding: 5px 15px;
-  cursor: pointer;
-  z-index: 10;
-  font-family: inherit;
-  font-size: 16px;
-}
-.close-camera-btn:hover {
-  background: rgba(74, 222, 128, 0.2);
-}
-
-.close-camera-btn:focus-visible {
-  outline: 2px solid #4ade80;
-  outline-offset: 3px;
+@keyframes cameraAnomaly {
+  0%, 100% { opacity: 0.42; filter: blur(0); }
+  50% { opacity: 0.92; filter: blur(1px); }
 }
 
 @media (max-width: 680px) {
   .security-camera-overlay {
-    padding: 22px;
+    padding: 20px;
   }
 
   .camera-header {
-    padding-right: 72px;
-    font-size: 16px;
-    gap: 14px;
+    grid-template-columns: 68px 1fr 58px;
+    gap: 8px;
   }
 
-  .camera-footer {
-    font-size: 12px;
-    gap: 14px;
+  .rec-indicator {
+    gap: 6px;
+    font-size: 13px;
   }
 
-  .camera-feed-content {
-    font-size: 12px;
-    letter-spacing: 2px;
-    text-align: center;
+  .rec-dot {
+    width: 9px;
+    height: 9px;
+  }
+
+  .camera-title span {
+    font-size: 8px;
+    letter-spacing: 0.7px;
+  }
+
+  .camera-title strong {
+    font-size: 15px;
+    letter-spacing: 0;
   }
 
   .close-camera-btn {
-    top: 22px;
-    right: 22px;
-    padding: 4px 10px;
-    font-size: 12px;
+    top: 20px;
+    right: 20px;
+    min-height: 28px;
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .camera-feed-content {
+    padding: 18px 0 74px;
+  }
+
+  .camera-feed-stage {
+    width: 100%;
+    height: 44vh;
+    min-height: 300px;
+  }
+
+  .camera-caption {
+    bottom: 74px;
+    width: calc(100vw - 40px);
+    padding: 10px;
+  }
+
+  .camera-caption span {
+    font-size: 8px;
+  }
+
+  .camera-caption small {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: 11px;
+  }
+
+  .camera-footer {
+    flex-direction: column;
+    gap: 8px;
+    font-size: 11px;
   }
 }

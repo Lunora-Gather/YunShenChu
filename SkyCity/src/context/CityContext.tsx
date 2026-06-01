@@ -6,6 +6,8 @@ import districtsData from '../data/districts.json';
 import entitiesData from '../data/entities.json';
 import pastWorldData from '../data/past_world.json';
 import pastDistrictsData from '../data/past_districts.json';
+import { getSignalById } from '../data/signals';
+import type { SignalIntel } from '../data/signals';
 
 interface District {
   id: string;
@@ -58,6 +60,11 @@ interface CityState {
   addAlert: (message: string, type?: 'info' | 'warning' | 'critical') => void;
   removeAlert: (id: string) => void;
   addDiaryEntry: (message: string, type: DiaryEntry['type'], location?: string) => void;
+  discoveredSignalIds: string[];
+  latestSignal: SignalIntel | null;
+  signalIntel: SignalIntel[];
+  focusSignal: (id: string) => void;
+  registerSignalDiscovery: (signal: SignalIntel) => void;
   world: WorldState;
   entities: typeof entitiesData;
   isPastMode: boolean;
@@ -81,7 +88,10 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [diary, setDiary] = useState<DiaryEntry[]>([]);
   const [lastSoundTrigger, setLastSoundTrigger] = useState<{ type: 'beep' | 'click'; timestamp: number } | null>(null);
   const [isPastMode, setIsPastMode] = useState(false);
+  const [discoveredSignalIds, setDiscoveredSignalIds] = useState<string[]>([]);
+  const [latestSignalId, setLatestSignalId] = useState<string | null>(null);
   const idCounterRef = useRef(0);
+  const discoveredSignalIdsRef = useRef<string[]>([]);
 
   const nextId = useCallback((prefix: string) => {
     idCounterRef.current += 1;
@@ -160,6 +170,65 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
     setDiary(prev => [entry, ...prev]);
   }, [nextId]);
+
+  const signalIntel = useMemo(() => {
+    return discoveredSignalIds
+      .map((id) => getSignalById(id))
+      .filter((signal): signal is SignalIntel => Boolean(signal));
+  }, [discoveredSignalIds]);
+
+  const latestSignal = useMemo(() => {
+    return latestSignalId ? getSignalById(latestSignalId) : null;
+  }, [latestSignalId]);
+
+  const focusSignal = useCallback((id: string) => {
+    if (discoveredSignalIdsRef.current.includes(id)) {
+      setLatestSignalId(id);
+      playUISound('click');
+    }
+  }, [playUISound]);
+
+  const registerSignalDiscovery = useCallback((signal: SignalIntel) => {
+    const alreadyDiscovered = discoveredSignalIdsRef.current.includes(signal.id);
+    setLatestSignalId(signal.id);
+    playUISound('beep');
+
+    if (alreadyDiscovered) {
+      return;
+    }
+
+    const nextSignals = [signal.id, ...discoveredSignalIdsRef.current];
+    discoveredSignalIdsRef.current = nextSignals;
+    setDiscoveredSignalIds(nextSignals);
+    addAlert(`SIGNAL LOCKED: ${signal.title}`, signal.severity);
+    addDiaryEntry(`Signal locked at ${signal.freq.toFixed(1)}MHz: ${signal.title}. ${signal.evidence}`, 'secret', signal.districtId);
+
+    if (signal.id === 'abyss-whale') {
+      setWeather(prev => ({
+        ...prev,
+        current_condition: 'Under-cloud Pressure Waves',
+        wind_speed: Math.max(prev.wind_speed, 18),
+      }));
+    }
+
+    if (signal.id === 'core-heartbeat') {
+      setWorld(prev => ({
+        ...prev,
+        global_stats: {
+          ...prev.global_stats,
+          energy_index: Math.max(70, Number((prev.global_stats.energy_index - 0.9).toFixed(1))),
+        },
+      }));
+    }
+
+    if (signal.id === 'observer-return') {
+      addAlert('OBSERVER LOOP DETECTED: Local session telemetry reflected back to console', 'critical');
+    }
+  }, [addAlert, addDiaryEntry, playUISound]);
+
+  useEffect(() => {
+    discoveredSignalIdsRef.current = discoveredSignalIds;
+  }, [discoveredSignalIds]);
 
   const toggleTemporalView = useCallback(() => {
     setIsPastMode(prev => {
@@ -341,6 +410,11 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       addAlert,
       removeAlert,
       addDiaryEntry,
+      discoveredSignalIds,
+      latestSignal,
+      signalIntel,
+      focusSignal,
+      registerSignalDiscovery,
       world,
       entities: entitiesData,
       isPastMode,

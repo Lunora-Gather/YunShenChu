@@ -5,9 +5,10 @@ import { useCity } from '../../context/CityContext';
 const buildingSlots = Array.from({ length: 8 });
 
 const Map3D: React.FC = () => {
-  const { currentDistricts, selectedDistrict, setDistrict } = useCity();
+  const { currentDistricts, discoveredSignalIds, latestSignal, selectedDistrict, setDistrict } = useCity();
   const [hoveredIslandId, setHoveredIslandId] = useState<string | null>(null);
   const [parallax, setParallax] = useState({ x: 0, y: 0 });
+  const discoveredSignalSet = useMemo(() => new Set(discoveredSignalIds), [discoveredSignalIds]);
 
   const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -47,7 +48,7 @@ const Map3D: React.FC = () => {
 
   return (
     <div
-      className="map-3d-container"
+      className={`map-3d-container ${latestSignal ? `focus-${latestSignal.mapFocus}` : ''} ${discoveredSignalSet.has('guixu') ? 'has-guixu' : ''} ${discoveredSignalSet.has('ghost-rail') ? 'has-ghost-rail' : ''} ${discoveredSignalSet.has('core-heartbeat') ? 'has-core-heartbeat' : ''} ${discoveredSignalSet.has('abyss-whale') ? 'has-abyss-whale' : ''} ${discoveredSignalSet.has('observer-return') ? 'has-observer-return' : ''}`}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
     >
@@ -63,8 +64,26 @@ const Map3D: React.FC = () => {
           </div>
           <div className="route-ring ring-a" />
           <div className="route-ring ring-b" />
+          <div className="ghost-rail-line" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </div>
           <div className="ghost-island" aria-hidden="true">
             <span>GUIXU</span>
+          </div>
+          <div className="core-heartbeat" aria-hidden="true">
+            <span />
+            <span />
+          </div>
+          <div className="abyss-echo" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </div>
+          <div className="observer-reticle" aria-hidden="true">
+            <span />
+            <span />
           </div>
 
           {islands.map((island) => (

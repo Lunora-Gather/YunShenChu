@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import './App.css';
 import { useCity } from './context/CityContext';
+import { SIGNAL_CATALOG } from './data/signals';
 import AudioEngine from './components/AudioEngine/AudioEngine';
 import BootSequence from './components/BootSequence/BootSequence';
 import Chronicle from './components/Chronicle/Chronicle';
@@ -60,24 +61,6 @@ const getStatusClass = (status: string) => {
   return 'status-active';
 };
 
-const discoveryCards = [
-  {
-    title: '归墟 / Missing Island 14',
-    detail: 'Satellite silence contradicts public maps. Shadow pings return from below the cloud barrier.',
-    meta: '104.2 MHz',
-  },
-  {
-    title: 'Ghost Rail',
-    detail: 'An unnumbered route appears only when the current district is under high administrative load.',
-    meta: 'Black line',
-  },
-  {
-    title: 'Core Heartbeat',
-    detail: 'The gravity cores pulse in a rhythm closer to biology than machinery.',
-    meta: 'Level 5',
-  },
-];
-
 const getDistrictInsight = (id: string) => {
   if (id === 'apex') return 'Transparent civic skin, sealed archive arteries, and command traffic rising above the cloudline.';
   if (id === 'mid_ring') return 'Warm commerce strata, dense pedestrian bridges, and the loudest civilian signal layer.';
@@ -95,12 +78,16 @@ function App() {
     addDiaryEntry,
     currentDistricts,
     currentTime,
+    discoveredSignalIds,
     entities,
+    focusSignal,
     isDay,
     isPastMode,
+    latestSignal,
     playUISound,
     selectedDistrict,
     setDistrict,
+    signalIntel,
     weather,
     world,
   } = useCity();
@@ -121,6 +108,9 @@ function App() {
     }));
   }, [selectedDistrict.social_metrics]);
 
+  const discoveredSignalSet = useMemo(() => new Set(discoveredSignalIds), [discoveredSignalIds]);
+  const discoveryProgress = Math.round((discoveredSignalIds.length / SIGNAL_CATALOG.length) * 100);
+
   const openInterceptor = () => {
     setIsInterceptorOpen(true);
     playUISound('click');
@@ -133,10 +123,31 @@ function App() {
     addDiaryEntry('Synthetic security camera feed requested.', 'visit', selectedDistrict.name);
   };
 
-  const markDiscovery = (title: string) => {
-    addDiaryEntry(`Anomaly thread reviewed: ${title}.`, 'secret', selectedDistrict.name);
+  const markDiscovery = (id: string, title: string) => {
+    if (discoveredSignalSet.has(id)) {
+      focusSignal(id);
+      addDiaryEntry(`Anomaly thread focused: ${title}.`, 'secret', selectedDistrict.name);
+      return;
+    }
+
+    addDiaryEntry(`Observer reviewed a locked anomaly stub: ${title}. Signal evidence still required.`, 'system', selectedDistrict.name);
     playUISound('beep');
+    setIsInterceptorOpen(true);
   };
+
+  useEffect(() => {
+    if (!isCameraOpen && !isInterceptorOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setIsCameraOpen(false);
+      setIsInterceptorOpen(false);
+      playUISound('click');
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isCameraOpen, isInterceptorOpen, playUISound]);
 
   if (!bootComplete) {
     return <BootSequence onComplete={() => setBootComplete(true)} />;
@@ -237,6 +248,13 @@ function App() {
               <span>Z {selectedDistrict.coordinates.z}</span>
             </div>
           </div>
+
+          {latestSignal && (
+            <div className={`signal-echo echo-${latestSignal.mapFocus}`}>
+              <span>{latestSignal.freq.toFixed(1)} MHz</span>
+              <strong>{latestSignal.title}</strong>
+            </div>
+          )}
 
           <div className={`anomaly-badge state-${anomalyState.toLowerCase()}`}>
             <AlertTriangle size={15} />
@@ -340,24 +358,33 @@ function App() {
               <div className="archive-banner">
                 <History size={16} />
                 <div>
-                  <span>Forbidden Depths</span>
-                  <strong>Evidence is revealed by signal, not by menu.</strong>
+                  <span>Forbidden Depths / {discoveryProgress}% resolved</span>
+                  <strong>{latestSignal ? latestSignal.evidence : 'Evidence is revealed by signal, not by menu.'}</strong>
                 </div>
               </div>
+              <div className="evidence-board">
+                <span>Latest Lock</span>
+                <strong>{latestSignal?.title ?? 'No signal locked'}</strong>
+                <small>{latestSignal?.message ?? 'Open the interceptor and sweep the hidden bands.'}</small>
+              </div>
               <div className="discovery-stack">
-                {discoveryCards.map((card) => (
-                  <button
-                    key={card.title}
-                    type="button"
-                    className="discovery-card"
-                    onClick={() => markDiscovery(card.title)}
-                    aria-label={`Review anomaly thread ${card.title}`}
-                  >
-                    <span>{card.meta}</span>
-                    <strong>{card.title}</strong>
-                    <small>{card.detail}</small>
-                  </button>
-                ))}
+                {SIGNAL_CATALOG.map((card) => {
+                  const isUnlocked = discoveredSignalSet.has(card.id);
+                  const isFocused = latestSignal?.id === card.id;
+                  return (
+                    <button
+                      key={card.id}
+                      type="button"
+                      className={`discovery-card ${isUnlocked ? 'unlocked' : 'locked'} ${isFocused ? 'focused' : ''}`}
+                      onClick={() => markDiscovery(card.id, card.title)}
+                      aria-label={`Review anomaly thread ${card.title}`}
+                    >
+                      <span>{isUnlocked ? `${card.freq.toFixed(1)} MHz / ${card.origin}` : 'LOCKED FREQUENCY'}</span>
+                      <strong>{card.title}</strong>
+                      <small>{isUnlocked ? card.evidence : 'Signal lock required before this file can be trusted.'}</small>
+                    </button>
+                  );
+                })}
               </div>
               <Chronicle timeline={entities.historical_timeline} />
             </div>
@@ -381,9 +408,9 @@ function App() {
             Scan hidden frequencies
           </button>
           <div>
-            <Cloud size={15} />
-            <span>Atmosphere</span>
-            <strong>{weather.current_condition}</strong>
+            <Radio size={15} />
+            <span>Signal Memory</span>
+            <strong>{signalIntel.length ? `${signalIntel.length}/${SIGNAL_CATALOG.length} ${latestSignal?.title ?? 'locked'}` : weather.current_condition}</strong>
           </div>
         </section>
       </main>
@@ -392,7 +419,7 @@ function App() {
       <ObserverDiary />
       <DeepTerminal />
       <AudioEngine />
-      <SecurityCamera isActive={isCameraOpen} onClose={() => setIsCameraOpen(false)} districtName={selectedDistrict.name} />
+      <SecurityCamera isActive={isCameraOpen} onClose={() => setIsCameraOpen(false)} />
       {isInterceptorOpen && <SignalInterceptor onClose={() => setIsInterceptorOpen(false)} />}
       {isPastMode && <div className="vcr-filter" aria-hidden="true" />}
       {isPastMode && <div className="vcr-noise" aria-hidden="true" />}

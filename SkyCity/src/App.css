@@ -399,6 +399,39 @@ button {
   background: rgba(65, 241, 214, 0.06);
 }
 
+.signal-echo {
+  position: absolute;
+  right: 20px;
+  bottom: 22px;
+  z-index: 8;
+  max-width: min(320px, 34vw);
+  padding: 10px 13px;
+  border: 1px solid rgba(255, 189, 104, 0.34);
+  border-radius: 8px;
+  background: rgba(10, 7, 2, 0.58);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 0 30px rgba(255, 189, 104, 0.12);
+}
+
+.signal-echo span,
+.evidence-board span {
+  display: block;
+  color: var(--accent-gold);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.signal-echo strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.25;
+}
+
 .anomaly-badge {
   position: absolute;
   top: 22px;
@@ -679,6 +712,32 @@ button {
   line-height: 1.4;
 }
 
+.evidence-board {
+  padding: 14px;
+  border: 1px solid rgba(0, 200, 255, 0.22);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(0, 200, 255, 0.09), transparent 48%),
+    rgba(255, 255, 255, 0.03);
+}
+
+.evidence-board strong,
+.evidence-board small {
+  display: block;
+}
+
+.evidence-board strong {
+  margin-top: 6px;
+  color: var(--text-primary);
+  font-size: 15px;
+}
+
+.evidence-board small {
+  margin-top: 8px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
 .discovery-stack {
   display: grid;
   gap: 10px;
@@ -700,6 +759,23 @@ button {
 .discovery-card:hover {
   border-color: rgba(255, 189, 104, 0.45);
   background: rgba(255, 189, 104, 0.07);
+}
+
+.discovery-card.locked {
+  opacity: 0.62;
+  filter: grayscale(0.45);
+}
+
+.discovery-card.unlocked {
+  border-color: rgba(0, 200, 255, 0.2);
+  background:
+    linear-gradient(135deg, rgba(0, 200, 255, 0.07), transparent 52%),
+    rgba(255, 255, 255, 0.035);
+}
+
+.discovery-card.focused {
+  border-color: rgba(255, 189, 104, 0.7);
+  box-shadow: 0 0 22px rgba(255, 189, 104, 0.16);
 }
 
 .discovery-card span {
@@ -1134,6 +1210,12 @@ button {
     padding: 2px 6px;
   }
 
+  .signal-echo {
+    right: 14px;
+    bottom: 14px;
+    max-width: min(260px, calc(100% - 28px));
+  }
+
   .window-toolbar {
     top: 14px;
     left: 14px;
@@ -1163,6 +1245,10 @@ button {
 @media (max-width: 480px) {
   .city-readout {
     top: 104px;
+  }
+
+  .signal-echo {
+    display: none;
   }
 }
 

@@ -1,17 +1,20 @@
 .alerts-container {
   position: fixed;
-  top: 100px;
-  right: 20px;
-  z-index: 2000;
+  top: 108px;
+  right: calc(380px + 36px);
+  z-index: 1900;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  max-height: calc(100vh - 224px);
+  overflow: hidden;
   pointer-events: none;
 }
 
 .alert-toast {
   pointer-events: auto;
-  width: 300px;
+  width: min(320px, 28vw);
+  min-width: 260px;
   background: var(--glass-bg);
   backdrop-filter: blur(15px);
   border: 1px solid var(--glass-border);
@@ -103,7 +106,7 @@
 
 .alert-critical {
   border-left: 4px solid #ef4444;
-  animation: alertSlideInRight 0.3s cubic-bezier(0.4, 0, 0.2, 1), alertFlashRed 1s infinite;
+  animation: alertSlideInRight 0.3s cubic-bezier(0.4, 0, 0.2, 1), alertFlashRed 1.8s infinite;
 }
 
 .alert-critical .alert-icon {
@@ -115,16 +118,38 @@
   color: #ef4444;
 }
 
+@media (max-width: 1220px) {
+  .alerts-container {
+    right: calc(330px + 28px);
+  }
+}
+
+@media (max-width: 960px) {
+  .alerts-container {
+    top: auto;
+    right: 14px;
+    bottom: 96px;
+    max-height: 32vh;
+  }
+
+  .alert-toast {
+    width: min(360px, calc(100vw - 28px));
+  }
+}
+
 @media (max-width: 680px) {
   .alerts-container {
     top: 76px;
     right: 10px;
+    bottom: auto;
     left: 10px;
     align-items: stretch;
+    max-height: 36vh;
   }
 
   .alert-toast {
     width: 100%;
+    min-width: 0;
   }
 }
 
@@ -140,10 +165,6 @@
 }
 
 @keyframes alertFlashRed {
-  0% { border-color: #ef4444; box-shadow: 0 0 10px #ef4444, inset 0 0 10px #ef4444; filter: brightness(1); }
-  15% { border-color: #ff0000; box-shadow: 0 0 40px #ff0000, inset 0 0 20px #ff0000; filter: brightness(1.5) contrast(1.2); }
-  30% { border-color: #ef4444; box-shadow: 0 0 10px #ef4444, inset 0 0 10px #ef4444; filter: brightness(1); }
-  45% { border-color: #ff0000; box-shadow: 0 0 50px #ff0000, inset 0 0 30px #ff0000; filter: brightness(1.8) contrast(1.5); }
-  60% { border-color: #7f1d1d; box-shadow: 0 0 5px #ef4444; filter: brightness(0.8); }
-  100% { border-color: #ef4444; box-shadow: 0 0 10px #ef4444, inset 0 0 10px #ef4444; filter: brightness(1); }
+  0%, 100% { border-color: #ef4444; box-shadow: 0 0 12px rgba(239, 68, 68, 0.34); filter: brightness(1); }
+  45% { border-color: #ff665a; box-shadow: 0 0 24px rgba(255, 102, 90, 0.46), inset 0 0 12px rgba(255, 102, 90, 0.18); filter: brightness(1.12); }
 }

@@ -61,7 +61,7 @@ const createTone = (
 };
 
 const AudioEngine: React.FC = () => {
-  const { selectedDistrict, lastSoundTrigger } = useCity();
+  const { latestSignal, selectedDistrict, lastSoundTrigger } = useCity();
   const [isMuted, setIsMuted] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -91,6 +91,38 @@ const AudioEngine: React.FC = () => {
     gain.connect(uiGainRef.current);
     oscillator.start(now);
     oscillator.stop(now + 0.2);
+  }, []);
+
+  const playSignalLockTone = useCallback((frequency: number) => {
+    if (!audioContextRef.current || !uiGainRef.current) return;
+    const ctx = audioContextRef.current;
+    if (ctx.state === 'suspended') void ctx.resume();
+
+    const now = ctx.currentTime;
+    const carrier = ctx.createOscillator();
+    const harmonic = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const filter = ctx.createBiquadFilter();
+
+    carrier.type = 'sine';
+    harmonic.type = 'triangle';
+    carrier.frequency.setValueAtTime(frequency * 6, now);
+    harmonic.frequency.setValueAtTime(frequency * 9, now);
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(frequency * 9, now);
+    filter.Q.value = 8;
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.exponentialRampToValueAtTime(0.16, now + 0.04);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.72);
+
+    carrier.connect(filter);
+    harmonic.connect(filter);
+    filter.connect(gain);
+    gain.connect(uiGainRef.current);
+    carrier.start(now);
+    harmonic.start(now + 0.03);
+    carrier.stop(now + 0.78);
+    harmonic.stop(now + 0.78);
   }, []);
 
   const initAudio = useCallback((startMuted: boolean) => {
@@ -155,6 +187,11 @@ const AudioEngine: React.FC = () => {
       playInternalUISound(lastSoundTrigger.type);
     }
   }, [lastSoundTrigger, isInitialized, playInternalUISound]);
+
+  useEffect(() => {
+    if (!latestSignal || !isInitialized || isMuted) return;
+    playSignalLockTone(latestSignal.freq);
+  }, [isInitialized, isMuted, latestSignal, playSignalLockTone]);
 
   useEffect(() => {
     if (!isInitialized || !audioContextRef.current) return;

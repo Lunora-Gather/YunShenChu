@@ -137,6 +137,155 @@
   animation: ghostDrift 7s ease-in-out infinite;
 }
 
+.has-guixu .ghost-island {
+  border-color: rgba(255, 189, 104, 0.9);
+  background:
+    radial-gradient(circle at 50% 55%, rgba(255, 189, 104, 0.18), transparent 54%),
+    rgba(255, 189, 104, 0.07);
+  color: rgba(255, 229, 191, 0.94);
+  box-shadow: 0 0 40px rgba(255, 189, 104, 0.28);
+}
+
+.ghost-rail-line {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 760px;
+  height: 220px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(-50%, -50%, 90px) rotateZ(-19deg);
+  transition: opacity 0.4s ease;
+}
+
+.ghost-rail-line span {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(255, 189, 104, 0.8), transparent);
+  box-shadow: 0 0 20px rgba(255, 189, 104, 0.28);
+}
+
+.ghost-rail-line span:nth-child(1) { top: 30%; }
+.ghost-rail-line span:nth-child(2) { top: 50%; opacity: 0.55; }
+.ghost-rail-line span:nth-child(3) { top: 70%; opacity: 0.28; }
+
+.has-ghost-rail .ghost-rail-line,
+.focus-ghost-rail .ghost-rail-line {
+  opacity: 1;
+}
+
+.core-heartbeat {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 120px;
+  height: 120px;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate3d(-50%, -50%, 210px);
+  transition: opacity 0.4s ease;
+}
+
+.core-heartbeat span {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(103, 242, 154, 0.76);
+  animation: heartbeatRing 2.2s ease-out infinite;
+}
+
+.core-heartbeat span:nth-child(2) {
+  animation-delay: 0.75s;
+}
+
+.has-core-heartbeat .core-heartbeat,
+.focus-core .core-heartbeat {
+  opacity: 1;
+}
+
+.abyss-echo {
+  position: absolute;
+  left: 50%;
+  top: 74%;
+  width: 640px;
+  height: 170px;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate3d(-50%, -50%, -180px);
+  transition: opacity 0.4s ease;
+}
+
+.abyss-echo span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 78%;
+  height: 42%;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(65, 241, 214, 0.48);
+  border-radius: 50%;
+  animation: abyssWave 4.4s ease-out infinite;
+}
+
+.abyss-echo span:nth-child(2) {
+  animation-delay: 1.1s;
+}
+
+.abyss-echo span:nth-child(3) {
+  animation-delay: 2.2s;
+}
+
+.has-abyss-whale .abyss-echo,
+.focus-abyss .abyss-echo {
+  opacity: 1;
+}
+
+.observer-reticle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 760px;
+  height: 760px;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate3d(-50%, -50%, 260px);
+  transition: opacity 0.35s ease;
+}
+
+.observer-reticle span {
+  position: absolute;
+  border: 1px solid rgba(255, 90, 68, 0.44);
+}
+
+.observer-reticle span:nth-child(1) {
+  inset: 0;
+  border-radius: 50%;
+  animation: observerSweep 8s linear infinite;
+}
+
+.observer-reticle span:nth-child(2) {
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg, transparent, rgba(255, 90, 68, 0.48), transparent);
+}
+
+.has-observer-return .observer-reticle,
+.focus-observer .observer-reticle {
+  opacity: 1;
+}
+
+.focus-guixu .ghost-island,
+.focus-observer .world,
+.focus-abyss .grid-floor {
+  filter: brightness(1.2) saturate(1.1);
+}
+
 .island {
   position: absolute;
   width: 162px;
@@ -419,4 +568,22 @@
 @keyframes ghostDrift {
   0%, 100% { opacity: 0.18; filter: blur(0.4px); }
   50% { opacity: 0.52; filter: blur(0); }
+}
+
+@keyframes heartbeatRing {
+  0% { transform: scale(0.2); opacity: 0.8; }
+  80% { opacity: 0; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+@keyframes abyssWave {
+  0% { transform: translate(-50%, -50%) scale(0.28); opacity: 0.72; }
+  82% { opacity: 0; }
+  100% { transform: translate(-50%, -50%) scale(1.25); opacity: 0; }
+}
+
+@keyframes observerSweep {
+  0% { transform: rotate(0deg) scale(0.9); opacity: 0.35; }
+  50% { transform: rotate(180deg) scale(1); opacity: 0.7; }
+  100% { transform: rotate(360deg) scale(0.9); opacity: 0.35; }
 }
