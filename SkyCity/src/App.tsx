@@ -17,9 +17,11 @@ import {
   MessageSquare,
   Radio,
   Route,
+  Search,
   Shield,
   Sparkles,
   Users,
+  X,
   Zap,
 } from 'lucide-react';
 import './App.css';
@@ -83,6 +85,7 @@ function App() {
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [activePanel, setActivePanel] = useState<InspectorPanel>('district');
   const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>('all');
+  const [archiveQuery, setArchiveQuery] = useState('');
   const {
     activeDirective,
     addDiaryEntry,
@@ -129,13 +132,31 @@ function App() {
   const discoveryProgress = Math.round((discoveredSignalIds.length / SIGNAL_CATALOG.length) * 100);
   const localSignalCount = signalTelemetry.districtSignalCounts[selectedDistrict.id] ?? 0;
   const filteredArchiveSignals = useMemo(() => {
+    const query = archiveQuery.trim().toLowerCase();
+
     return SIGNAL_CATALOG.filter((signal) => {
       const isUnlocked = discoveredSignalSet.has(signal.id);
       if (archiveFilter === 'unlocked') return isUnlocked;
       if (archiveFilter === 'sealed') return !isUnlocked;
       return true;
+    }).filter((signal) => {
+      if (!query) return true;
+
+      const searchableText = [
+        signal.id,
+        signal.title,
+        signal.origin,
+        signal.lead,
+        signal.evidence,
+        signal.impact,
+        signal.containment,
+        signal.districtId ?? '',
+        ...signal.investigation.actions.flatMap((action) => [action.id, action.label, action.description]),
+      ].join(' ').toLowerCase();
+
+      return searchableText.includes(query);
     });
-  }, [archiveFilter, discoveredSignalSet]);
+  }, [archiveFilter, archiveQuery, discoveredSignalSet]);
   const latestInvestigationThread = investigationState.latestThread;
   const nextInvestigationAction = investigationState.nextAction;
 
@@ -548,6 +569,25 @@ function App() {
                 <span>Next Lead</span>
                 <strong>{signalTelemetry.nextLead}</strong>
               </div>
+              <div className="archive-search-bar">
+                <Search size={14} />
+                <input
+                  type="search"
+                  value={archiveQuery}
+                  onChange={(event) => setArchiveQuery(event.target.value)}
+                  placeholder="Search archive..."
+                  aria-label="Search archive threads"
+                />
+                {archiveQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setArchiveQuery('')}
+                    aria-label="Clear archive search"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
               <div className="archive-filter-bar" aria-label="Archive signal filters">
                 {archiveFilterOptions.map((option) => (
                   <button
@@ -563,7 +603,7 @@ function App() {
                 <span>{filteredArchiveSignals.length} threads</span>
               </div>
               <div className="discovery-stack">
-                {filteredArchiveSignals.map((card) => {
+                {filteredArchiveSignals.length ? filteredArchiveSignals.map((card) => {
                   const isUnlocked = discoveredSignalSet.has(card.id);
                   const isFocused = latestSignal?.id === card.id;
                   const thread = investigationState.threads[card.id];
@@ -615,7 +655,13 @@ function App() {
                       )}
                     </div>
                   );
-                })}
+                }) : (
+                  <div className="archive-empty-state">
+                    <Search size={18} />
+                    <strong>No matching threads</strong>
+                    <span>{archiveQuery ? archiveQuery : archiveFilter}</span>
+                  </div>
+                )}
               </div>
               <Chronicle timeline={entities.historical_timeline} />
             </div>

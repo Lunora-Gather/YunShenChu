@@ -129,6 +129,8 @@
 - Terminal 类 Next Action 改为打开终端并自动执行对应命令，状态仍由真实命令路径推进，不再需要用户额外按 Enter。
 - 终端收到外部动作请求时会中断上一条逐字输出并恢复输入状态，避免连续调查动作被 typing lock 卡住。
 - 全局 Next Action 同时覆盖区域、终端、摄像头和 Diary 动作，Guixu 与 Observer Return 均可从底部入口完成闭环。
+- Archive 新增搜索输入，覆盖异常 id、标题、来源、线索、证据、影响和调查动作文案。
+- Archive 增加空结果态，搜索或过滤没有命中时不再留下空白列表。
 
 ## 最终轮验证
 
@@ -137,5 +139,6 @@
 - 浏览器验证底部 Next Action 入口：Guixu 的区域检查、终端追踪、摄像头复核可连续完成并进入 contained。
 - 浏览器验证 Terminal 自动执行：点击 Next Action 后自动运行 `trace guixu`、`trace observer-return` 与 `memory`。
 - 浏览器验证 Observer Return 从全局 Next Action 完成 trace、memory、Diary 三步后进入 contained。
+- 浏览器验证 Archive 搜索可命中已解锁和未解锁异常，搜索空结果态正常显示，清空按钮可恢复列表。
 - 移动端 390x844 验证主界面与 Signal Strip 无横向溢出。
 - 浏览器验证未捕获应用 console error。
