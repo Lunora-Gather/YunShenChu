@@ -1210,6 +1210,10 @@ button {
   backdrop-filter: var(--glass-blur);
 }
 
+.signal-strip.has-next-action {
+  grid-template-columns: minmax(0, 1fr) auto minmax(190px, 0.72fr) minmax(0, 1fr);
+}
+
 .signal-strip div,
 .signal-strip button {
   min-width: 0;
@@ -1249,6 +1253,33 @@ button {
   cursor: pointer;
   font-weight: 900;
   font-size: 11px;
+}
+
+.signal-strip .strip-next-action {
+  justify-content: flex-start;
+  max-width: 100%;
+  border-color: rgba(255, 189, 104, 0.34);
+  background:
+    linear-gradient(90deg, rgba(255, 189, 104, 0.13), rgba(103, 242, 154, 0.05)),
+    rgba(255, 189, 104, 0.045);
+  color: var(--accent-gold);
+}
+
+.signal-strip .strip-next-action strong {
+  max-width: 190px;
+  color: var(--accent-gold);
+}
+
+.signal-strip .strip-next-action:hover {
+  border-color: rgba(255, 189, 104, 0.62);
+  background:
+    linear-gradient(90deg, rgba(255, 189, 104, 0.18), rgba(103, 242, 154, 0.075)),
+    rgba(255, 189, 104, 0.075);
+  color: var(--text-primary);
+}
+
+.signal-strip .strip-next-action:hover strong {
+  color: var(--text-primary);
 }
 
 .particles-container {
@@ -1572,7 +1603,8 @@ button {
   }
 
   .operation-grid,
-  .signal-strip {
+  .signal-strip,
+  .signal-strip.has-next-action {
     grid-template-columns: 1fr;
   }
 

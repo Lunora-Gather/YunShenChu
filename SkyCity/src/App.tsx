@@ -628,7 +628,7 @@ function App() {
           )}
         </aside>
 
-        <section className="signal-strip" aria-label="Anomaly signal strip">
+        <section className={`signal-strip ${nextInvestigationAction ? 'has-next-action' : ''}`} aria-label="Anomaly signal strip">
           <div>
             <Sparkles size={15} />
             <span>Active Directive</span>
@@ -638,6 +638,18 @@ function App() {
             <Radio size={15} />
             Scan hidden frequencies
           </button>
+          {nextInvestigationAction && (
+            <button
+              type="button"
+              className="strip-next-action"
+              onClick={() => runInvestigationAction(nextInvestigationAction.signal.id, nextInvestigationAction.action.id)}
+              aria-label={`Run next investigation action ${nextInvestigationAction.action.label}`}
+            >
+              <CheckCircle size={15} />
+              <span>Next Action</span>
+              <strong>{nextInvestigationAction.action.label}</strong>
+            </button>
+          )}
           <div>
             <Radio size={15} />
             <span>Signal Memory</span>

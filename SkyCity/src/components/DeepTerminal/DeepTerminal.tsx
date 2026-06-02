@@ -98,26 +98,6 @@ const DeepTerminal: React.FC = () => {
   }, [isOpen]);
 
   useEffect(() => {
-    if (!terminalCommandRequest || lastTerminalCommandRequestRef.current === terminalCommandRequest.id) return;
-
-    lastTerminalCommandRequestRef.current = terminalCommandRequest.id;
-    if (typingTimerRef.current) {
-      clearInterval(typingTimerRef.current);
-      typingTimerRef.current = null;
-    }
-    setIsTyping(false);
-    setIsOpen(true);
-    setInput(terminalCommandRequest.command);
-    setHistory((prev) => [
-      ...prev,
-      {
-        type: 'response' as const,
-        text: `COMMAND READY: ${terminalCommandRequest.label}. Press Enter to run "${terminalCommandRequest.command}".`,
-      },
-    ].slice(-80));
-  }, [terminalCommandRequest]);
-
-  useEffect(() => {
     if (!isOpen || !latestSignal || lastAnnouncedSignalRef.current === latestSignal.id) return;
     lastAnnouncedSignalRef.current = latestSignal.id;
     setHistory((prev) => [
@@ -207,8 +187,8 @@ const DeepTerminal: React.FC = () => {
     return true;
   }, [completeInvestigationAction, discoveredSignalSet, investigationState.threads, latestSignal]);
 
-  const runCommand = useCallback((fullCommand: string) => {
-    if (!fullCommand.trim() || isTyping) return;
+  const runCommand = useCallback((fullCommand: string, options?: { force?: boolean }) => {
+    if (!fullCommand.trim() || (!options?.force && isTyping)) return;
 
     const normalizedCommand = fullCommand.trim();
     const cmd = normalizedCommand.toLowerCase();
@@ -418,6 +398,45 @@ const DeepTerminal: React.FC = () => {
     world.global_stats.status,
     world.global_stats.total_population,
   ]);
+
+  useEffect(() => {
+    if (!terminalCommandRequest || lastTerminalCommandRequestRef.current === terminalCommandRequest.id) return;
+
+    lastTerminalCommandRequestRef.current = terminalCommandRequest.id;
+
+    const routeTimer = window.setTimeout(() => {
+      if (typingTimerRef.current) {
+        clearInterval(typingTimerRef.current);
+        typingTimerRef.current = null;
+      }
+      setIsTyping(false);
+      setIsOpen(true);
+
+      if (terminalCommandRequest.autoRun) {
+        setInput('');
+        setHistory((prev) => [
+          ...prev,
+          {
+            type: 'response' as const,
+            text: `COMMAND ROUTED: ${terminalCommandRequest.label}.`,
+          },
+        ].slice(-80));
+        runCommand(terminalCommandRequest.command, { force: true });
+        return;
+      }
+
+      setInput(terminalCommandRequest.command);
+      setHistory((prev) => [
+        ...prev,
+        {
+          type: 'response' as const,
+          text: `COMMAND READY: ${terminalCommandRequest.label}. Press Enter to run "${terminalCommandRequest.command}".`,
+        },
+      ].slice(-80));
+    }, 0);
+
+    return () => window.clearTimeout(routeTimer);
+  }, [runCommand, terminalCommandRequest]);
 
   const submitQuickCommand = (command: string) => {
     runCommand(command);

@@ -122,3 +122,20 @@
 - 浏览器验证 observer-return 闭环：Terminal 动作按钮只预填命令，不提前完成；`trace observer-return`、`memory` 和 Diary 打开分别推进对应动作。
 - 移动端 390x844 验证 Archive 与 Diary 无横向溢出。
 - 浏览器验证未捕获应用 console error。
+
+## 最终轮体验收束
+
+- 底部 Signal Strip 新增全局 Next Action 入口，已解锁调查不再必须先切到 Systems 面板才能继续。
+- Terminal 类 Next Action 改为打开终端并自动执行对应命令，状态仍由真实命令路径推进，不再需要用户额外按 Enter。
+- 终端收到外部动作请求时会中断上一条逐字输出并恢复输入状态，避免连续调查动作被 typing lock 卡住。
+- 全局 Next Action 同时覆盖区域、终端、摄像头和 Diary 动作，Guixu 与 Observer Return 均可从底部入口完成闭环。
+
+## 最终轮验证
+
+- `npm run lint` 通过。
+- `npm run build` 通过。
+- 浏览器验证底部 Next Action 入口：Guixu 的区域检查、终端追踪、摄像头复核可连续完成并进入 contained。
+- 浏览器验证 Terminal 自动执行：点击 Next Action 后自动运行 `trace guixu`、`trace observer-return` 与 `memory`。
+- 浏览器验证 Observer Return 从全局 Next Action 完成 trace、memory、Diary 三步后进入 contained。
+- 移动端 390x844 验证主界面与 Signal Strip 无横向溢出。
+- 浏览器验证未捕获应用 console error。

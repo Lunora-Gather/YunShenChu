@@ -142,6 +142,7 @@ interface TerminalCommandRequest {
   actionId: string;
   command: string;
   label: string;
+  autoRun: boolean;
 }
 
 interface DiaryReviewRequest {
@@ -575,6 +576,7 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       actionId: action.id,
       command: action.command,
       label: action.label,
+      autoRun: true,
     });
     playUISound('click');
   }, [playUISound]);
