@@ -99,3 +99,26 @@
 - Deep Terminal 增加 `GO <district>` 与 `DISTRICT <district>` 命令，终端可以直接切换观察区域。
 - Deep Terminal 增加命令历史回放，方向键可以复用最近命令，减少重复输入。
 - 日记打开态层级高于底部终端，避免状态栏被终端闭合条覆盖。
+
+## 第七轮深度优化
+
+- 信号目录新增调查动作结构，每条异常拥有区域、终端、摄像头、居民流或档案相关动作。
+- 全局观察者记忆升级到 schema v3，并保留 v2 读取迁移，避免旧 localStorage 记忆丢失。
+- Context 新增 `investigationState`，统一计算 sealed/detected/corroborated/contained 阶段、动作进度和下一步。
+- Systems 面板新增 Next Action 控制台，可以直接执行下一步调查动作。
+- Archive 卡片新增阶段、动作进度条和动作清单，动作完成后会进入持久化记忆。
+- Deep Terminal 新增 `INVESTIGATION`、`NEXT_ACTION`、`COMPLETE <action>` 命令，`TRACE <signal>` 会推进匹配的 terminal 调查动作。
+- Diary 摘要新增当前调查阶段，和 Archive/Systems 的阶段显示保持一致。
+- 实际操作会自动推进调查动作：切到相关区域、打开摄像头、进入 Pulse/Archive/Systems 都会记录对应调查进度。
+- 终端类调查动作不再被按钮直接跳过：Next Action 会打开 Terminal 并预填命令，执行后才推进状态。
+- Diary 调查动作独立于 Archive，打开观察日志会完成对应本地记忆核查。
+
+## 第七轮验证
+
+- `npm run lint` 通过。
+- `npm run build` 通过。
+- 浏览器验证 v2 localStorage 迁移到 schema v3，且已发现信号会保留显式空调查动作数组。
+- 浏览器验证 Guixu 闭环：Systems 下一步、区域检查、Terminal trace、Camera、Archive contained、Diary stage 一致。
+- 浏览器验证 observer-return 闭环：Terminal 动作按钮只预填命令，不提前完成；`trace observer-return`、`memory` 和 Diary 打开分别推进对应动作。
+- 移动端 390x844 验证 Archive 与 Diary 无横向溢出。
+- 浏览器验证未捕获应用 console error。

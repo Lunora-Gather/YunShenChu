@@ -15,10 +15,19 @@ const diaryFilterOptions: Array<{ id: DiaryFilter; label: string }> = [
 ];
 
 const ObserverDiary: React.FC = () => {
-  const { diary, latestSignal, observerMemory, signalTelemetry } = useCity();
+  const {
+    completeInvestigationAction,
+    diary,
+    diaryReviewRequest,
+    investigationState,
+    latestSignal,
+    observerMemory,
+    signalTelemetry,
+  } = useCity();
   const [isOpen, setIsOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<DiaryFilter>('all');
   const entriesStartRef = useRef<HTMLDivElement>(null);
+  const lastDiaryReviewRequestRef = useRef<number | null>(null);
   const entryTypeCounts = useMemo(() => {
     return diary.reduce<Record<string, number>>((counts, entry) => {
       counts[entry.type] = (counts[entry.type] ?? 0) + 1;
@@ -35,6 +44,25 @@ const ObserverDiary: React.FC = () => {
       entriesStartRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [diary, isOpen]);
+
+  useEffect(() => {
+    if (!diaryReviewRequest || lastDiaryReviewRequestRef.current === diaryReviewRequest.id) return;
+
+    lastDiaryReviewRequestRef.current = diaryReviewRequest.id;
+    setIsOpen(true);
+    completeInvestigationAction(diaryReviewRequest.signalId, diaryReviewRequest.actionId);
+  }, [completeInvestigationAction, diaryReviewRequest]);
+
+  useEffect(() => {
+    if (!isOpen || !latestSignal) return;
+
+    const thread = investigationState.threads[latestSignal.id];
+    const diaryAction = latestSignal.investigation.actions.find((action) => action.type === 'diary');
+
+    if (thread && diaryAction && !thread.completedActionIds.includes(diaryAction.id)) {
+      completeInvestigationAction(latestSignal.id, diaryAction.id);
+    }
+  }, [completeInvestigationAction, investigationState.threads, isOpen, latestSignal]);
 
   return (
     <div className={`observer-diary-drawer ${isOpen ? 'open' : ''}`}>
@@ -75,6 +103,10 @@ const ObserverDiary: React.FC = () => {
           <div>
             <span>latest</span>
             <strong>{latestSignal?.title ?? 'No lock'}</strong>
+          </div>
+          <div>
+            <span>stage</span>
+            <strong>{investigationState.latestThread?.stage ?? 'sealed'}</strong>
           </div>
           <div>
             <span>secret</span>

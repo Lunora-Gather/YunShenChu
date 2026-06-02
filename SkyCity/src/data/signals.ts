@@ -2,6 +2,19 @@ export type SignalSeverity = 'info' | 'warning' | 'critical';
 
 export type SignalMapFocus = 'guixu' | 'ghost-rail' | 'core' | 'observer' | 'abyss';
 
+export type InvestigationStage = 'sealed' | 'detected' | 'corroborated' | 'contained';
+
+export type InvestigationActionType = 'camera' | 'terminal' | 'district' | 'citizens' | 'archive' | 'diary';
+
+export interface InvestigationAction {
+  id: string;
+  type: InvestigationActionType;
+  label: string;
+  description: string;
+  command?: string;
+  districtId?: string;
+}
+
 export interface SignalIntel {
   id: string;
   freq: number;
@@ -17,6 +30,12 @@ export interface SignalIntel {
   districtId?: string;
   severity: SignalSeverity;
   mapFocus: SignalMapFocus;
+  investigation: {
+    detected: string;
+    corroborated: string;
+    contained: string;
+    actions: InvestigationAction[];
+  };
 }
 
 export const SIGNAL_CATALOG: SignalIntel[] = [
@@ -35,6 +54,34 @@ export const SIGNAL_CATALOG: SignalIntel[] = [
     districtId: 'foundation',
     severity: 'critical',
     mapFocus: 'guixu',
+    investigation: {
+      detected: 'A hidden island return has entered observer memory, but the source is not yet corroborated.',
+      corroborated: 'Foundation routing and archive altitude records now agree that the island return is not an interface artifact.',
+      contained: 'Guixu remains unresolved, but observer operations have enough evidence to keep lower routes under manual watch.',
+      actions: [
+        {
+          id: 'inspect-foundation',
+          type: 'district',
+          label: 'Inspect Foundation layer',
+          description: 'Switch observer focus to the lower foundation lattice where the return becomes physical.',
+          command: 'go foundation',
+          districtId: 'foundation',
+        },
+        {
+          id: 'trace-guixu',
+          type: 'terminal',
+          label: 'Run terminal trace',
+          description: 'Trace the Guixu thread from Deep Terminal to compare memory and map focus.',
+          command: 'trace guixu',
+        },
+        {
+          id: 'review-camera',
+          type: 'camera',
+          label: 'Review lower-route camera',
+          description: 'Open the synthetic camera feed while Guixu is focused.',
+        },
+      ],
+    },
   },
   {
     id: 'abyss-whale',
@@ -51,6 +98,34 @@ export const SIGNAL_CATALOG: SignalIntel[] = [
     districtId: 'foundation',
     severity: 'warning',
     mapFocus: 'abyss',
+    investigation: {
+      detected: 'Pressure waves are audible below cloudline, but public weather still reports calm conditions.',
+      corroborated: 'Vent reports and under-cloud telemetry now point to the same low-frequency source.',
+      contained: 'Weather output is throttled and the thermal vent layer is flagged for manual review.',
+      actions: [
+        {
+          id: 'inspect-foundation',
+          type: 'district',
+          label: 'Inspect vent district',
+          description: 'Focus the foundation district before reviewing pressure telemetry.',
+          command: 'go foundation',
+          districtId: 'foundation',
+        },
+        {
+          id: 'trace-abyss',
+          type: 'terminal',
+          label: 'Trace under-cloud echo',
+          description: 'Run a terminal trace against the abyss-whale anomaly key.',
+          command: 'trace abyss-whale',
+        },
+        {
+          id: 'review-citizens',
+          type: 'citizens',
+          label: 'Review resident reports',
+          description: 'Open Pulse and compare vent-shift reports against the signal pressure.',
+        },
+      ],
+    },
   },
   {
     id: 'ghost-rail',
@@ -67,6 +142,34 @@ export const SIGNAL_CATALOG: SignalIntel[] = [
     districtId: 'apex',
     severity: 'warning',
     mapFocus: 'ghost-rail',
+    investigation: {
+      detected: 'An unnumbered transit route appears during administrative load spikes.',
+      corroborated: 'Apex transit stress and archive access windows both reproduce the same black-line path.',
+      contained: 'Administrative shuttle priority is capped while the Ghost Rail route remains visible.',
+      actions: [
+        {
+          id: 'inspect-apex',
+          type: 'district',
+          label: 'Inspect Apex routes',
+          description: 'Focus Lingxiao Apex where sealed route traffic concentrates.',
+          command: 'go apex',
+          districtId: 'apex',
+        },
+        {
+          id: 'trace-ghost-rail',
+          type: 'terminal',
+          label: 'Trace Ghost Rail',
+          description: 'Run terminal trace for the black-route anomaly.',
+          command: 'trace ghost-rail',
+        },
+        {
+          id: 'review-archive',
+          type: 'archive',
+          label: 'Review archive thread',
+          description: 'Open Archive and compare Ghost Rail evidence against locked transit records.',
+        },
+      ],
+    },
   },
   {
     id: 'core-heartbeat',
@@ -83,6 +186,34 @@ export const SIGNAL_CATALOG: SignalIntel[] = [
     districtId: 'mid_ring',
     severity: 'warning',
     mapFocus: 'core',
+    investigation: {
+      detected: 'Gravity telemetry is repeating at a biological cadence.',
+      corroborated: 'Energy drift and observer district changes now line up with the same pulse interval.',
+      contained: 'Core monitoring is pinned to manual cadence until the city stops reacting to observer focus changes.',
+      actions: [
+        {
+          id: 'inspect-mid-ring',
+          type: 'district',
+          label: 'Inspect mid-ring load',
+          description: 'Focus the commercial ring before sampling the gravity pulse.',
+          command: 'go mid_ring',
+          districtId: 'mid_ring',
+        },
+        {
+          id: 'trace-core',
+          type: 'terminal',
+          label: 'Trace core heartbeat',
+          description: 'Run terminal trace against core-heartbeat.',
+          command: 'trace core-heartbeat',
+        },
+        {
+          id: 'review-systems',
+          type: 'archive',
+          label: 'Review system resonance',
+          description: 'Open Systems and compare energy index against signal pressure.',
+        },
+      ],
+    },
   },
   {
     id: 'observer-return',
@@ -98,6 +229,33 @@ export const SIGNAL_CATALOG: SignalIntel[] = [
     pressure: 24,
     severity: 'critical',
     mapFocus: 'observer',
+    investigation: {
+      detected: 'The observer loop is reflecting session timing back into the interface.',
+      corroborated: 'Terminal traces and local session telemetry now agree that the observer is part of the signal.',
+      contained: 'Session telemetry remains local, and external export is blocked for the active investigation.',
+      actions: [
+        {
+          id: 'trace-observer',
+          type: 'terminal',
+          label: 'Trace observer loop',
+          description: 'Run terminal trace for observer-return while watching the session clock.',
+          command: 'trace observer-return',
+        },
+        {
+          id: 'review-memory',
+          type: 'terminal',
+          label: 'Audit observer memory',
+          description: 'Run the MEMORY command and verify persistence state before export.',
+          command: 'memory',
+        },
+        {
+          id: 'review-diary',
+          type: 'diary',
+          label: 'Review local diary',
+          description: 'Open Diary and verify observer-loop events stay in local memory.',
+        },
+      ],
+    },
   },
 ];
 

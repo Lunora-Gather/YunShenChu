@@ -5,6 +5,7 @@ import {
   AudioLines,
   BookOpen,
   Camera,
+  CheckCircle,
   Cloud,
   Compass,
   Database,
@@ -90,11 +91,15 @@ function App() {
     discoveredSignalIds,
     entities,
     focusSignal,
+    completeInvestigationAction,
+    investigationState,
     isDay,
     isPastMode,
     latestSignal,
     observerMemory,
     playUISound,
+    requestDiaryReview,
+    requestTerminalAction,
     selectedDistrict,
     setDistrict,
     signalIntel,
@@ -131,6 +136,8 @@ function App() {
       return true;
     });
   }, [archiveFilter, discoveredSignalSet]);
+  const latestInvestigationThread = investigationState.latestThread;
+  const nextInvestigationAction = investigationState.nextAction;
 
   const openInterceptor = () => {
     setIsInterceptorOpen(true);
@@ -142,6 +149,14 @@ function App() {
     setIsCameraOpen(true);
     playUISound('click');
     addDiaryEntry('Synthetic security camera feed requested.', 'visit', selectedDistrict.name);
+
+    if (latestSignal) {
+      const thread = investigationState.threads[latestSignal.id];
+      const cameraAction = latestSignal.investigation.actions.find((action) => action.type === 'camera');
+      if (thread && cameraAction && !thread.completedActionIds.includes(cameraAction.id)) {
+        completeInvestigationAction(latestSignal.id, cameraAction.id);
+      }
+    }
   };
 
   const markDiscovery = (id: string, title: string) => {
@@ -154,6 +169,42 @@ function App() {
     addDiaryEntry(`Observer reviewed a locked anomaly stub: ${title}. Signal evidence still required.`, 'system', selectedDistrict.name);
     playUISound('beep');
     setIsInterceptorOpen(true);
+  };
+
+  const runInvestigationAction = (signalId: string, actionId: string) => {
+    const signal = SIGNAL_CATALOG.find((item) => item.id === signalId);
+    const action = signal?.investigation.actions.find((item) => item.id === actionId);
+    if (!signal || !action) return;
+
+    if (action.type === 'terminal') {
+      requestTerminalAction(signal.id, action.id);
+      return;
+    }
+
+    if (action.type === 'diary') {
+      requestDiaryReview(signal.id, action.id);
+      return;
+    }
+
+    focusSignal(signal.id);
+
+    if (action.type === 'district' && action.districtId) {
+      setDistrict(action.districtId);
+    }
+
+    if (action.type === 'camera') {
+      setIsCameraOpen(true);
+    }
+
+    if (action.type === 'citizens') {
+      setActivePanel('citizens');
+    }
+
+    if (action.type === 'archive') {
+      setActivePanel(action.id === 'review-systems' ? 'systems' : 'archive');
+    }
+
+    completeInvestigationAction(signal.id, action.id);
   };
 
   useEffect(() => {
@@ -169,6 +220,39 @@ function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isCameraOpen, isInterceptorOpen, playUISound]);
+
+  useEffect(() => {
+    if (!latestSignal) return;
+
+    const thread = investigationState.threads[latestSignal.id];
+    if (!thread || thread.stage === 'sealed') return;
+
+    const districtAction = latestSignal.investigation.actions.find((action) => (
+      action.type === 'district' && action.districtId === selectedDistrict.id
+    ));
+
+    if (districtAction && !thread.completedActionIds.includes(districtAction.id)) {
+      completeInvestigationAction(latestSignal.id, districtAction.id);
+    }
+  }, [completeInvestigationAction, investigationState.threads, latestSignal, selectedDistrict.id]);
+
+  useEffect(() => {
+    if (!latestSignal) return;
+
+    const thread = investigationState.threads[latestSignal.id];
+    if (!thread || thread.stage === 'sealed') return;
+
+    const matchingAction = latestSignal.investigation.actions.find((action) => {
+      if (activePanel === 'citizens') return action.type === 'citizens';
+      if (activePanel === 'archive') return action.type === 'archive';
+      if (activePanel === 'systems') return action.id === 'review-systems';
+      return false;
+    });
+
+    if (matchingAction && !thread.completedActionIds.includes(matchingAction.id)) {
+      completeInvestigationAction(latestSignal.id, matchingAction.id);
+    }
+  }, [activePanel, completeInvestigationAction, investigationState.threads, latestSignal]);
 
   if (!bootComplete) {
     return <BootSequence onComplete={() => setBootComplete(true)} />;
@@ -406,6 +490,26 @@ function App() {
                   </div>
                 </div>
               </div>
+              <div className={`next-action-console stage-${latestInvestigationThread?.stage ?? 'sealed'}`}>
+                <div className="next-action-header">
+                  <CheckCircle size={16} />
+                  <span>Next Action</span>
+                  <strong>{latestInvestigationThread?.stage ?? 'sealed'}</strong>
+                </div>
+                {nextInvestigationAction ? (
+                  <>
+                    <p>{nextInvestigationAction.action.description}</p>
+                    <button
+                      type="button"
+                      onClick={() => runInvestigationAction(nextInvestigationAction.signal.id, nextInvestigationAction.action.id)}
+                    >
+                      {nextInvestigationAction.action.label}
+                    </button>
+                  </>
+                ) : (
+                  <p>{latestInvestigationThread ? latestInvestigationThread.stageText : 'Lock a signal to begin anomaly investigation.'}</p>
+                )}
+              </div>
               <div className={`resonance-console level-${signalTelemetry.level}`}>
                 <div className="resonance-header">
                   <span>Resonance Matrix</span>
@@ -462,19 +566,54 @@ function App() {
                 {filteredArchiveSignals.map((card) => {
                   const isUnlocked = discoveredSignalSet.has(card.id);
                   const isFocused = latestSignal?.id === card.id;
+                  const thread = investigationState.threads[card.id];
                   return (
-                    <button
+                    <div
                       key={card.id}
-                      type="button"
                       className={`discovery-card ${isUnlocked ? 'unlocked' : 'locked'} ${isFocused ? 'focused' : ''}`}
-                      onClick={() => markDiscovery(card.id, card.title)}
-                      aria-label={`Review anomaly thread ${card.title}`}
                     >
-                      <span>{isUnlocked ? `${card.freq.toFixed(1)} MHz / ${card.origin}` : 'LOCKED FREQUENCY'}</span>
-                      <strong>{card.title}</strong>
-                      <small>{isUnlocked ? card.evidence : card.lead}</small>
-                      {isUnlocked && <em>{card.impact}</em>}
-                    </button>
+                      <button
+                        type="button"
+                        className="discovery-card-main"
+                        onClick={() => markDiscovery(card.id, card.title)}
+                        aria-label={`Review anomaly thread ${card.title}`}
+                      >
+                        <span>{isUnlocked ? `${card.freq.toFixed(1)} MHz / ${card.origin}` : 'LOCKED FREQUENCY'}</span>
+                        <strong>{card.title}</strong>
+                        <small>{isUnlocked ? card.evidence : card.lead}</small>
+                        {isUnlocked && <em>{card.impact}</em>}
+                      </button>
+                      {thread && (
+                        <div className={`investigation-strip stage-${thread.stage}`}>
+                          <div className="investigation-strip-header">
+                            <span>{thread.stage}</span>
+                            <strong>{thread.completedActionIds.length}/{thread.totalActions} actions</strong>
+                          </div>
+                          <div className="investigation-progress" aria-label={`${card.title} investigation progress ${thread.progress}%`}>
+                            <span style={{ width: `${thread.progress}%` }} />
+                          </div>
+                          {isUnlocked && (
+                            <div className="investigation-actions">
+                              {card.investigation.actions.map((action) => {
+                                const isComplete = thread.completedActionIds.includes(action.id);
+                                return (
+                                  <button
+                                    key={action.id}
+                                    type="button"
+                                    className={isComplete ? 'complete' : ''}
+                                    onClick={() => runInvestigationAction(card.id, action.id)}
+                                    disabled={isComplete}
+                                  >
+                                    {isComplete ? 'done' : action.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                          <p>{thread.stageText}</p>
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>

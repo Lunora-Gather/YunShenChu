@@ -13,9 +13,11 @@ const DeepTerminal: React.FC = () => {
   const {
     activeDirective,
     addDiaryEntry,
+    completeInvestigationAction,
     currentDistricts,
     discoveredSignalIds,
     focusSignal,
+    investigationState,
     isPastMode,
     latestSignal,
     observerMemory,
@@ -24,6 +26,7 @@ const DeepTerminal: React.FC = () => {
     setDistrict,
     signalIntel,
     signalTelemetry,
+    terminalCommandRequest,
     weather,
     world,
   } = useCity();
@@ -41,6 +44,7 @@ const DeepTerminal: React.FC = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const typingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastAnnouncedSignalRef = useRef<string | null>(null);
+  const lastTerminalCommandRequestRef = useRef<number | null>(null);
 
   const discoveredSignalSet = useMemo(() => new Set(discoveredSignalIds), [discoveredSignalIds]);
 
@@ -94,6 +98,26 @@ const DeepTerminal: React.FC = () => {
   }, [isOpen]);
 
   useEffect(() => {
+    if (!terminalCommandRequest || lastTerminalCommandRequestRef.current === terminalCommandRequest.id) return;
+
+    lastTerminalCommandRequestRef.current = terminalCommandRequest.id;
+    if (typingTimerRef.current) {
+      clearInterval(typingTimerRef.current);
+      typingTimerRef.current = null;
+    }
+    setIsTyping(false);
+    setIsOpen(true);
+    setInput(terminalCommandRequest.command);
+    setHistory((prev) => [
+      ...prev,
+      {
+        type: 'response' as const,
+        text: `COMMAND READY: ${terminalCommandRequest.label}. Press Enter to run "${terminalCommandRequest.command}".`,
+      },
+    ].slice(-80));
+  }, [terminalCommandRequest]);
+
+  useEffect(() => {
     if (!isOpen || !latestSignal || lastAnnouncedSignalRef.current === latestSignal.id) return;
     lastAnnouncedSignalRef.current = latestSignal.id;
     setHistory((prev) => [
@@ -105,6 +129,11 @@ const DeepTerminal: React.FC = () => {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && isOpen) {
+        if (typingTimerRef.current) {
+          clearInterval(typingTimerRef.current);
+          typingTimerRef.current = null;
+        }
+        setIsTyping(false);
         setIsOpen(false);
         playUISound('click');
       }
@@ -161,6 +190,23 @@ const DeepTerminal: React.FC = () => {
     }, 12);
   }, [addLine]);
 
+  const completeMatchingTerminalCommand = useCallback((command: string) => {
+    if (!latestSignal || !discoveredSignalSet.has(latestSignal.id)) return false;
+
+    const normalizedCommand = command.trim().toLowerCase();
+    const thread = investigationState.threads[latestSignal.id];
+    const action = latestSignal.investigation.actions.find((item) => (
+      item.type === 'terminal' &&
+      item.command?.toLowerCase() === normalizedCommand &&
+      !thread?.completedActionIds.includes(item.id)
+    ));
+
+    if (!action) return false;
+
+    completeInvestigationAction(latestSignal.id, action.id);
+    return true;
+  }, [completeInvestigationAction, discoveredSignalSet, investigationState.threads, latestSignal]);
+
   const runCommand = useCallback((fullCommand: string) => {
     if (!fullCommand.trim() || isTyping) return;
 
@@ -180,7 +226,7 @@ const DeepTerminal: React.FC = () => {
     }
 
     if (cmd === 'help') {
-      addResponse('Available commands: WORLD_STATUS, QUERY DISTRICTS, GO <district>, DISTRICT <district>, SIGNALS, MEMORY, SIGNAL_PRESSURE, NEXT_LEAD, LATEST_SIGNAL, TRACE <signal>, FOCUS <signal>, SCAN_ENEMIES, CLEAR.');
+      addResponse('Available commands: WORLD_STATUS, QUERY DISTRICTS, GO <district>, DISTRICT <district>, SIGNALS, MEMORY, INVESTIGATION, NEXT_ACTION, COMPLETE <action>, SIGNAL_PRESSURE, NEXT_LEAD, LATEST_SIGNAL, TRACE <signal>, FOCUS <signal>, SCAN_ENEMIES, CLEAR.');
       return;
     }
 
@@ -219,7 +265,59 @@ const DeepTerminal: React.FC = () => {
     }
 
     if (cmd === 'memory' || cmd === 'observer_memory') {
+      completeMatchingTerminalCommand(cmd);
       addResponse(`OBSERVER MEMORY: ${observerMemory.canPersist ? 'PERSISTENT' : 'VOLATILE'} / restored=${observerMemory.restored ? 'YES' : 'NO'} / signals=${observerMemory.discoveredCount}/${SIGNAL_CATALOG.length} / diary=${observerMemory.diaryCount}/${observerMemory.diaryLimit} / persisted_cap=${observerMemory.persistedDiaryLimit} / latest=${latestSignal?.title ?? 'NONE'}.`);
+      return;
+    }
+
+    if (cmd === 'investigation' || cmd === 'investigations') {
+      const lines = discoveredSignalIds.length
+        ? discoveredSignalIds.map((signalId) => {
+          const thread = investigationState.threads[signalId];
+          if (!thread) return null;
+          return `${thread.signal.id}: ${thread.stage.toUpperCase()} / ${thread.completedActionIds.length}/${thread.totalActions} actions / next=${thread.nextAction?.id ?? 'none'}`;
+        }).filter(Boolean)
+        : ['No unlocked investigation threads.'];
+      addResponse(`INVESTIGATION STATE\n${lines.join('\n')}`);
+      return;
+    }
+
+    if (cmd === 'next_action' || cmd === 'next action' || cmd === 'action') {
+      if (!investigationState.nextAction) {
+        addResponse('NEXT ACTION: none. Lock a signal or complete the remaining investigation actions.');
+        return;
+      }
+
+      const { signal, action } = investigationState.nextAction;
+      addResponse(`NEXT ACTION: ${signal.title} / ${action.id}\n${action.label}: ${action.description}${action.command ? `\nCommand: ${action.command}` : ''}`);
+      return;
+    }
+
+    if (verb === 'complete') {
+      const latestThread = investigationState.latestThread;
+      const [firstArg, secondArg] = rest;
+      const explicitSignal = firstArg ? findSignal(firstArg) : null;
+      const signal = explicitSignal ?? latestThread?.signal ?? null;
+      const actionId = explicitSignal ? secondArg : firstArg;
+
+      if (!signal || !actionId) {
+        addResponse('COMPLETE FAILED: use COMPLETE <action> for the focused signal or COMPLETE <signal> <action>.', 'error');
+        return;
+      }
+
+      const action = signal.investigation.actions.find((item) => item.id === actionId);
+      if (!action) {
+        addResponse(`COMPLETE FAILED: "${actionId}" is not a valid action for ${signal.title}.`, 'error');
+        return;
+      }
+
+      if (!discoveredSignalSet.has(signal.id)) {
+        addResponse(`COMPLETE DENIED: ${signal.title} is still sealed.`, 'error');
+        return;
+      }
+
+      completeInvestigationAction(signal.id, action.id);
+      addResponse(`ACTION COMPLETE: ${signal.title} / ${action.label}`);
       return;
     }
 
@@ -277,6 +375,10 @@ const DeepTerminal: React.FC = () => {
 
       focusSignal(signal.id);
       addDiaryEntry(`Terminal trace opened for ${signal.title}.`, 'secret', selectedDistrict.name);
+      const terminalAction = signal.investigation.actions.find((action) => action.type === 'terminal' && action.command?.toLowerCase() === `trace ${signal.id}`);
+      if (terminalAction) {
+        completeInvestigationAction(signal.id, terminalAction.id);
+      }
       addResponse(`${signal.title} / ${signal.freq.toFixed(1)}MHz\n${signal.message}\nMap focus: ${signal.mapFocus.toUpperCase()} / Origin: ${signal.origin}`);
       return;
     }
@@ -289,14 +391,18 @@ const DeepTerminal: React.FC = () => {
     addResponse(`ERROR: Command "${normalizedCommand}" not recognized. Type "help" for valid commands.`, 'error');
   }, [
     activeDirective,
+    completeInvestigationAction,
+    completeMatchingTerminalCommand,
     addDiaryEntry,
     addLine,
     addResponse,
     currentDistricts,
+    discoveredSignalIds,
     discoveredSignalSet,
     findDistrict,
     findSignal,
     focusSignal,
+    investigationState,
     isPastMode,
     isTyping,
     latestSignal,

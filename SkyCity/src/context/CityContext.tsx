@@ -7,7 +7,7 @@ import entitiesData from '../data/entities.json';
 import pastWorldData from '../data/past_world.json';
 import pastDistrictsData from '../data/past_districts.json';
 import { getSignalById, SIGNAL_CATALOG } from '../data/signals';
-import type { SignalIntel } from '../data/signals';
+import type { InvestigationAction, InvestigationStage, SignalIntel } from '../data/signals';
 
 interface District {
   id: string;
@@ -37,7 +37,9 @@ type ResonanceLevel = 'quiet' | 'watch' | 'unstable' | 'breach';
 
 const presentDistricts = districtsData as DistrictSource[];
 const archiveDistricts = pastDistrictsData as DistrictSource[];
-const OBSERVER_STORAGE_KEY = 'yunshenchu.observer.v2';
+const OBSERVER_STORAGE_VERSION = 3;
+const OBSERVER_STORAGE_KEY = 'yunshenchu.observer.v3';
+const LEGACY_OBSERVER_STORAGE_KEYS = ['yunshenchu.observer.v2'];
 const ALERT_DEDUPE_WINDOW_MS = 6500;
 const MAX_SESSION_DIARY_ENTRIES = 80;
 const MAX_PERSISTED_DIARY_ENTRIES = 48;
@@ -70,7 +72,13 @@ interface CityState {
   signalIntel: SignalIntel[];
   signalTelemetry: SignalTelemetry;
   observerMemory: ObserverMemoryState;
+  investigationState: InvestigationState;
+  terminalCommandRequest: TerminalCommandRequest | null;
+  diaryReviewRequest: DiaryReviewRequest | null;
   focusSignal: (id: string) => void;
+  completeInvestigationAction: (signalId: string, actionId: string) => void;
+  requestTerminalAction: (signalId: string, actionId: string) => void;
+  requestDiaryReview: (signalId: string, actionId: string) => void;
   registerSignalDiscovery: (signal: SignalIntel) => void;
   world: WorldState;
   entities: typeof entitiesData;
@@ -103,6 +111,44 @@ interface ObserverMemoryState {
   diaryLimit: number;
   persistedDiaryLimit: number;
   storageKey: string;
+  schemaVersion: number;
+}
+
+export interface InvestigationThreadState {
+  signal: SignalIntel;
+  stage: InvestigationStage;
+  stageText: string;
+  completedActionIds: string[];
+  totalActions: number;
+  nextAction: InvestigationAction | null;
+  progress: number;
+}
+
+interface InvestigationNextAction {
+  signal: SignalIntel;
+  action: InvestigationAction;
+}
+
+interface InvestigationState {
+  threads: Record<string, InvestigationThreadState>;
+  latestThread: InvestigationThreadState | null;
+  nextAction: InvestigationNextAction | null;
+  completedActionIds: Record<string, string[]>;
+}
+
+interface TerminalCommandRequest {
+  id: number;
+  signalId: string;
+  actionId: string;
+  command: string;
+  label: string;
+}
+
+interface DiaryReviewRequest {
+  id: number;
+  signalId: string;
+  actionId: string;
+  label: string;
 }
 
 const CityContext = createContext<CityState | undefined>(undefined);
@@ -112,15 +158,19 @@ interface PersistedDiaryEntry extends Omit<DiaryEntry, 'timestamp'> {
 }
 
 interface ObserverStorageState {
+  schemaVersion: number;
   discoveredSignalIds: string[];
   latestSignalId: string | null;
   diary: DiaryEntry[];
+  completedInvestigationActions: Record<string, string[]>;
 }
 
 const emptyObserverStorage: ObserverStorageState = {
+  schemaVersion: OBSERVER_STORAGE_VERSION,
   discoveredSignalIds: [],
   latestSignalId: null,
   diary: [],
+  completedInvestigationActions: {},
 };
 
 const isDiaryType = (value: unknown): value is DiaryEntry['type'] => (
@@ -132,6 +182,33 @@ const normalizeSignalIds = (value: unknown) => {
 
   return Array.from(new Set(value))
     .filter((id): id is string => typeof id === 'string' && Boolean(getSignalById(id)));
+};
+
+const normalizeCompletedInvestigationActions = (value: unknown) => {
+  if (!value || typeof value !== 'object') return {};
+
+  return Object.entries(value as Record<string, unknown>).reduce<Record<string, string[]>>((normalized, [signalId, actionIds]) => {
+    const signal = getSignalById(signalId);
+    if (!signal || !Array.isArray(actionIds)) return normalized;
+
+    const validActionIds = new Set(signal.investigation.actions.map((action) => action.id));
+    const uniqueActionIds = Array.from(new Set(actionIds))
+      .filter((actionId): actionId is string => typeof actionId === 'string' && validActionIds.has(actionId));
+
+    normalized[signal.id] = uniqueActionIds;
+
+    return normalized;
+  }, {});
+};
+
+const seedCompletedInvestigationActions = (
+  completedActionIds: Record<string, string[]>,
+  discoveredSignalIds: string[],
+) => {
+  return discoveredSignalIds.reduce<Record<string, string[]>>((seeded, signalId) => {
+    seeded[signalId] = seeded[signalId] ?? [];
+    return seeded;
+  }, { ...completedActionIds });
 };
 
 const parseDiaryEntry = (value: unknown): DiaryEntry | null => {
@@ -159,17 +236,16 @@ const parseDiaryEntry = (value: unknown): DiaryEntry | null => {
   };
 };
 
-const readObserverStorage = (): ObserverStorageState => {
-  if (typeof window === 'undefined') return emptyObserverStorage;
+const parseObserverStorage = (rawStorage: string | null): ObserverStorageState | null => {
+  if (!rawStorage) return null;
 
   try {
-    const rawStorage = window.localStorage.getItem(OBSERVER_STORAGE_KEY);
-    if (!rawStorage) return emptyObserverStorage;
-
     const parsed = JSON.parse(rawStorage) as Partial<{
+      schemaVersion: unknown;
       discoveredSignalIds: unknown;
       latestSignalId: unknown;
       diary: unknown;
+      completedInvestigationActions: unknown;
     }>;
 
     const discoveredSignalIds = normalizeSignalIds(parsed.discoveredSignalIds);
@@ -184,13 +260,32 @@ const readObserverStorage = (): ObserverStorageState => {
       : [];
 
     return {
+      schemaVersion: typeof parsed.schemaVersion === 'number' ? parsed.schemaVersion : 2,
       discoveredSignalIds,
       latestSignalId,
       diary,
+      completedInvestigationActions: seedCompletedInvestigationActions(
+        normalizeCompletedInvestigationActions(parsed.completedInvestigationActions),
+        discoveredSignalIds,
+      ),
     };
   } catch {
-    return emptyObserverStorage;
+    return null;
   }
+};
+
+const readObserverStorage = (): ObserverStorageState => {
+  if (typeof window === 'undefined') return emptyObserverStorage;
+
+  const currentStorage = parseObserverStorage(window.localStorage.getItem(OBSERVER_STORAGE_KEY));
+  if (currentStorage) return currentStorage;
+
+  for (const legacyKey of LEGACY_OBSERVER_STORAGE_KEYS) {
+    const legacyStorage = parseObserverStorage(window.localStorage.getItem(legacyKey));
+    if (legacyStorage) return legacyStorage;
+  }
+
+  return emptyObserverStorage;
 };
 
 const canUseObserverStorage = () => {
@@ -214,6 +309,18 @@ const getStoredCounterFloor = (storage: ObserverStorageState) => {
   return Math.max(0, ...diaryNumbers);
 };
 
+const getInvestigationStage = (signal: SignalIntel, isDiscovered: boolean, completedActionIds: string[]): InvestigationStage => {
+  if (!isDiscovered) return 'sealed';
+  if (completedActionIds.length >= signal.investigation.actions.length) return 'contained';
+  if (completedActionIds.length > 0) return 'corroborated';
+  return 'detected';
+};
+
+const getInvestigationStageText = (signal: SignalIntel, stage: InvestigationStage) => {
+  if (stage === 'sealed') return signal.lead;
+  return signal.investigation[stage];
+};
+
 export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [storedObserverState] = useState<ObserverStorageState>(readObserverStorage);
   const [canPersistObserverMemory] = useState(canUseObserverStorage);
@@ -225,8 +332,13 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isPastMode, setIsPastMode] = useState(false);
   const [discoveredSignalIds, setDiscoveredSignalIds] = useState<string[]>(storedObserverState.discoveredSignalIds);
   const [latestSignalId, setLatestSignalId] = useState<string | null>(storedObserverState.latestSignalId);
+  const [completedInvestigationActions, setCompletedInvestigationActions] = useState<Record<string, string[]>>(storedObserverState.completedInvestigationActions);
+  const [terminalCommandRequest, setTerminalCommandRequest] = useState<TerminalCommandRequest | null>(null);
+  const [diaryReviewRequest, setDiaryReviewRequest] = useState<DiaryReviewRequest | null>(null);
   const idCounterRef = useRef(getStoredCounterFloor(storedObserverState));
+  const requestCounterRef = useRef(0);
   const discoveredSignalIdsRef = useRef<string[]>(storedObserverState.discoveredSignalIds);
+  const completedInvestigationActionsRef = useRef<Record<string, string[]>>(storedObserverState.completedInvestigationActions);
   const alertDedupeRef = useRef<Record<string, number>>({});
 
   const nextId = useCallback((prefix: string) => {
@@ -366,13 +478,123 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     diaryLimit: MAX_SESSION_DIARY_ENTRIES,
     persistedDiaryLimit: MAX_PERSISTED_DIARY_ENTRIES,
     storageKey: OBSERVER_STORAGE_KEY,
+    schemaVersion: OBSERVER_STORAGE_VERSION,
   }), [canPersistObserverMemory, diary.length, discoveredSignalIds.length, storedObserverState]);
+
+  const investigationState = useMemo<InvestigationState>(() => {
+    const discoveredSet = new Set(discoveredSignalIds);
+    const threads = SIGNAL_CATALOG.reduce<Record<string, InvestigationThreadState>>((state, signal) => {
+      const completedActionIds = completedInvestigationActions[signal.id] ?? [];
+      const stage = getInvestigationStage(signal, discoveredSet.has(signal.id), completedActionIds);
+      const completedSet = new Set(completedActionIds);
+      const nextAction = stage === 'sealed'
+        ? null
+        : signal.investigation.actions.find((action) => !completedSet.has(action.id)) ?? null;
+
+      state[signal.id] = {
+        signal,
+        stage,
+        stageText: getInvestigationStageText(signal, stage),
+        completedActionIds,
+        totalActions: signal.investigation.actions.length,
+        nextAction,
+        progress: signal.investigation.actions.length
+          ? Math.round((completedActionIds.length / signal.investigation.actions.length) * 100)
+          : stage === 'sealed' ? 0 : 100,
+      };
+
+      return state;
+    }, {});
+
+    const latestThread = latestSignal ? threads[latestSignal.id] ?? null : null;
+    const nextThread = latestThread?.nextAction
+      ? latestThread
+      : discoveredSignalIds
+        .map((id) => threads[id])
+        .find((thread) => thread?.nextAction) ?? null;
+
+    return {
+      threads,
+      latestThread,
+      nextAction: nextThread?.nextAction ? { signal: nextThread.signal, action: nextThread.nextAction } : null,
+      completedActionIds: completedInvestigationActions,
+    };
+  }, [completedInvestigationActions, discoveredSignalIds, latestSignal]);
 
   const focusSignal = useCallback((id: string) => {
     if (discoveredSignalIdsRef.current.includes(id)) {
       setLatestSignalId(id);
       playUISound('click');
     }
+  }, [playUISound]);
+
+  const completeInvestigationAction = useCallback((signalId: string, actionId: string) => {
+    const signal = getSignalById(signalId);
+    if (!signal || !discoveredSignalIdsRef.current.includes(signal.id)) return;
+
+    const action = signal.investigation.actions.find((item) => item.id === actionId);
+    if (!action) return;
+
+    const currentActionIds = completedInvestigationActionsRef.current[signal.id] ?? [];
+    if (currentActionIds.includes(action.id)) {
+      setLatestSignalId(signal.id);
+      playUISound('click');
+      return;
+    }
+
+    const nextActionIds = [...currentActionIds, action.id];
+    const nextCompletedActions = {
+      ...completedInvestigationActionsRef.current,
+      [signal.id]: nextActionIds,
+    };
+    completedInvestigationActionsRef.current = nextCompletedActions;
+    setCompletedInvestigationActions(nextCompletedActions);
+    setLatestSignalId(signal.id);
+    playUISound('click');
+
+    const nextStage = getInvestigationStage(signal, true, nextActionIds);
+    addDiaryEntry(`Investigation advanced for ${signal.title}: ${action.label}. Stage=${nextStage}.`, 'secret', signal.districtId);
+
+    if (nextStage === 'contained') {
+      addAlert(`INVESTIGATION CONTAINED: ${signal.title}`, signal.severity);
+    }
+  }, [addAlert, addDiaryEntry, playUISound]);
+
+  const requestTerminalAction = useCallback((signalId: string, actionId: string) => {
+    const signal = getSignalById(signalId);
+    if (!signal || !discoveredSignalIdsRef.current.includes(signal.id)) return;
+
+    const action = signal.investigation.actions.find((item) => item.id === actionId);
+    if (!action || action.type !== 'terminal' || !action.command) return;
+
+    requestCounterRef.current += 1;
+    setLatestSignalId(signal.id);
+    setTerminalCommandRequest({
+      id: requestCounterRef.current,
+      signalId: signal.id,
+      actionId: action.id,
+      command: action.command,
+      label: action.label,
+    });
+    playUISound('click');
+  }, [playUISound]);
+
+  const requestDiaryReview = useCallback((signalId: string, actionId: string) => {
+    const signal = getSignalById(signalId);
+    if (!signal || !discoveredSignalIdsRef.current.includes(signal.id)) return;
+
+    const action = signal.investigation.actions.find((item) => item.id === actionId);
+    if (!action || action.type !== 'diary') return;
+
+    requestCounterRef.current += 1;
+    setLatestSignalId(signal.id);
+    setDiaryReviewRequest({
+      id: requestCounterRef.current,
+      signalId: signal.id,
+      actionId: action.id,
+      label: action.label,
+    });
+    playUISound('click');
   }, [playUISound]);
 
   const registerSignalDiscovery = useCallback((signal: SignalIntel) => {
@@ -385,8 +607,14 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     const nextSignals = [signal.id, ...discoveredSignalIdsRef.current];
+    const nextCompletedActions = {
+      ...completedInvestigationActionsRef.current,
+      [signal.id]: completedInvestigationActionsRef.current[signal.id] ?? [],
+    };
     discoveredSignalIdsRef.current = nextSignals;
+    completedInvestigationActionsRef.current = nextCompletedActions;
     setDiscoveredSignalIds(nextSignals);
+    setCompletedInvestigationActions(nextCompletedActions);
     addAlert(`SIGNAL LOCKED: ${signal.title}`, signal.severity);
     addDiaryEntry(`Signal locked at ${signal.freq.toFixed(1)}MHz: ${signal.title}. ${signal.evidence}`, 'secret', signal.districtId);
 
@@ -418,11 +646,17 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [discoveredSignalIds]);
 
   useEffect(() => {
+    completedInvestigationActionsRef.current = completedInvestigationActions;
+  }, [completedInvestigationActions]);
+
+  useEffect(() => {
     if (!canPersistObserverMemory || typeof window === 'undefined') return;
 
     const payload = {
+      schemaVersion: OBSERVER_STORAGE_VERSION,
       discoveredSignalIds,
       latestSignalId,
+      completedInvestigationActions: seedCompletedInvestigationActions(completedInvestigationActions, discoveredSignalIds),
       diary: diary.slice(0, MAX_PERSISTED_DIARY_ENTRIES).map((entry) => ({
         ...entry,
         timestamp: entry.timestamp.toISOString(),
@@ -434,7 +668,7 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } catch {
       // Local memory is a progressive enhancement; the live observer state should keep running without it.
     }
-  }, [canPersistObserverMemory, diary, discoveredSignalIds, latestSignalId]);
+  }, [canPersistObserverMemory, completedInvestigationActions, diary, discoveredSignalIds, latestSignalId]);
 
   const toggleTemporalView = useCallback(() => {
     setIsPastMode(prev => {
@@ -621,7 +855,13 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       signalIntel,
       signalTelemetry,
       observerMemory,
+      investigationState,
+      terminalCommandRequest,
+      diaryReviewRequest,
       focusSignal,
+      completeInvestigationAction,
+      requestTerminalAction,
+      requestDiaryReview,
       registerSignalDiscovery,
       world,
       entities: entitiesData,

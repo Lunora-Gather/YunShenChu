@@ -843,6 +843,74 @@ button {
   text-transform: uppercase;
 }
 
+.next-action-console {
+  display: grid;
+  gap: 11px;
+  padding: 14px;
+  border: 1px solid rgba(255, 189, 104, 0.24);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(255, 189, 104, 0.08), transparent 54%),
+    rgba(255, 255, 255, 0.032);
+}
+
+.next-action-console.stage-contained {
+  border-color: rgba(103, 242, 154, 0.26);
+  background:
+    linear-gradient(135deg, rgba(103, 242, 154, 0.07), transparent 54%),
+    rgba(255, 255, 255, 0.032);
+}
+
+.next-action-header {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.next-action-header svg {
+  color: var(--accent-gold);
+}
+
+.next-action-header span {
+  flex: 1;
+  color: var(--text-secondary);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+
+.next-action-header strong {
+  color: var(--accent-gold);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.next-action-console p {
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.next-action-console button {
+  min-height: 32px;
+  border: 1px solid rgba(255, 189, 104, 0.4);
+  border-radius: 6px;
+  background: rgba(255, 189, 104, 0.08);
+  color: var(--accent-gold);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.next-action-console button:hover {
+  border-color: rgba(255, 189, 104, 0.7);
+  background: rgba(255, 189, 104, 0.14);
+  color: var(--text-primary);
+}
+
 .compact-panel .economy-sidebar-section,
 .compact-panel .citizen-feed-container,
 .compact-panel .chronicle-container {
@@ -976,15 +1044,12 @@ button {
 }
 
 .discovery-card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 7px;
+  display: grid;
+  gap: 10px;
   padding: 14px;
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.035);
-  cursor: pointer;
   text-align: left;
 }
 
@@ -1010,6 +1075,21 @@ button {
   box-shadow: 0 0 22px rgba(255, 189, 104, 0.16);
 }
 
+.discovery-card-main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
 .discovery-card span {
   color: var(--accent-blue);
   font-family: 'JetBrains Mono', ui-monospace, monospace;
@@ -1022,6 +1102,96 @@ button {
 
 .discovery-card small {
   color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.investigation-strip {
+  display: grid;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid rgba(0, 200, 255, 0.14);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.investigation-strip.stage-corroborated {
+  border-color: rgba(255, 189, 104, 0.2);
+}
+
+.investigation-strip.stage-contained {
+  border-color: rgba(103, 242, 154, 0.22);
+}
+
+.investigation-strip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.investigation-strip-header span,
+.investigation-strip-header strong {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.investigation-strip-header span {
+  color: var(--accent-gold);
+}
+
+.investigation-strip-header strong {
+  color: var(--text-secondary);
+}
+
+.investigation-progress {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.investigation-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent-blue), var(--accent-gold), var(--accent-green));
+}
+
+.investigation-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
+.investigation-actions button {
+  min-height: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 900;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.investigation-actions button:hover:not(:disabled) {
+  border-color: rgba(0, 200, 255, 0.4);
+  color: var(--text-primary);
+}
+
+.investigation-actions button.complete {
+  color: var(--accent-green);
+  cursor: default;
+  opacity: 0.72;
+}
+
+.investigation-strip p {
+  color: var(--text-secondary);
+  font-size: 11px;
   line-height: 1.45;
 }
 
@@ -1202,7 +1372,9 @@ button {
 .control-btn:focus-visible,
 .panel-tabs button:focus-visible,
 .signal-strip button:focus-visible,
-.discovery-card:focus-visible {
+.discovery-card-main:focus-visible,
+.investigation-actions button:focus-visible,
+.next-action-console button:focus-visible {
   outline: 2px solid var(--accent-gold);
   outline-offset: 3px;
 }
