@@ -40,6 +40,18 @@
   color: var(--accent-blue);
 }
 
+.interceptor-title-copy {
+  display: grid;
+  gap: 3px;
+}
+
+.interceptor-title-copy small {
+  color: var(--text-secondary);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9px;
+  letter-spacing: 1px;
+}
+
 .interceptor-close-btn {
   display: flex;
   align-items: center;
@@ -207,7 +219,7 @@
 .signal-presets {
   display: grid;
   gap: 8px;
-  margin-bottom: 18px;
+  margin-bottom: 0;
 }
 
 .signal-presets button {
@@ -230,6 +242,11 @@
   border-color: rgba(0, 200, 255, 0.5);
   background: rgba(0, 200, 255, 0.1);
   color: var(--text-primary);
+}
+
+.signal-presets button:disabled {
+  cursor: wait;
+  opacity: 0.54;
 }
 
 .signal-presets button.sealed {
@@ -260,6 +277,7 @@
 
 .interceptor-results {
   min-height: 100px;
+  margin-bottom: 18px;
   background: rgba(0, 0, 0, 0.3);
   border-radius: 8px;
   padding: 15px;

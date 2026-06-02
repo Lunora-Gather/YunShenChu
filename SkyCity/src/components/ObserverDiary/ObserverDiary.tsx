@@ -1,16 +1,22 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useCity } from '../../context/CityContext';
 import { Book, ChevronDown, ChevronUp, Clock, MapPin, Search, Shield, Terminal } from 'lucide-react';
 import './ObserverDiary.css';
 
 const ObserverDiary: React.FC = () => {
-  const { diary } = useCity();
+  const { diary, latestSignal, observerMemory, signalTelemetry } = useCity();
   const [isOpen, setIsOpen] = useState(false);
-  const entriesEndRef = useRef<HTMLDivElement>(null);
+  const entriesStartRef = useRef<HTMLDivElement>(null);
+  const entryTypeCounts = useMemo(() => {
+    return diary.reduce<Record<string, number>>((counts, entry) => {
+      counts[entry.type] = (counts[entry.type] ?? 0) + 1;
+      return counts;
+    }, {});
+  }, [diary]);
 
   useEffect(() => {
-    if (isOpen && entriesEndRef.current) {
-      entriesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (isOpen && entriesStartRef.current) {
+      entriesStartRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [diary, isOpen]);
 
@@ -40,8 +46,28 @@ const ObserverDiary: React.FC = () => {
             <span className="meta-item">OPERATOR: OBSERVER_01</span>
           </div>
         </div>
+
+        <div className="diary-summary" aria-label="Observer memory summary">
+          <div>
+            <span>memory</span>
+            <strong>{observerMemory.canPersist ? 'persistent' : 'volatile'}</strong>
+          </div>
+          <div>
+            <span>signals</span>
+            <strong>{observerMemory.discoveredCount}/{observerMemory.discoveredCount + signalTelemetry.unresolvedCount}</strong>
+          </div>
+          <div>
+            <span>latest</span>
+            <strong>{latestSignal?.title ?? 'No lock'}</strong>
+          </div>
+          <div>
+            <span>secret</span>
+            <strong>{entryTypeCounts.secret ?? 0}</strong>
+          </div>
+        </div>
         
         <div className="diary-entries">
+          <div ref={entriesStartRef} />
           {diary.length === 0 ? (
             <div className="empty-diary">
               <div className="empty-icon"><Search size={48} /></div>
@@ -72,15 +98,14 @@ const ObserverDiary: React.FC = () => {
               </div>
             ))
           )}
-          <div ref={entriesEndRef} />
         </div>
         
         <div className="diary-status-bar">
           <div className="status-indicator-group">
             <div className="status-dot diary-pulse"></div>
-            <span>LOCAL MEMORY SYNC ACTIVE</span>
+            <span>{observerMemory.canPersist ? 'LOCAL MEMORY SYNC ACTIVE' : 'LOCAL MEMORY VOLATILE'}</span>
           </div>
-          <div className="timestamp-footer">{new Date().toDateString()}</div>
+          <div className="timestamp-footer">{observerMemory.diaryCount}/{observerMemory.diaryLimit} ENTRIES</div>
         </div>
       </div>
     </div>

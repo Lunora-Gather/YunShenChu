@@ -81,3 +81,12 @@
 - Signal Interceptor 的 Auto-Scan 改为优先追踪未解封频段，全部发现后再循环已知目录。
 - 频段预设增加 sealed/discovered 状态差异，操作者能更快分辨哪些线索已经进入长期记忆。
 - 日记空态和状态栏文案从“当前 session”改为“local memory”，和新连续性机制保持一致。
+
+## 第五轮深度优化
+
+- 全局上下文新增 `observerMemory` 摘要，让终端、日记和后续界面共享同一份记忆状态。
+- Deep Terminal 新增 `MEMORY` 与 `FOCUS <signal>` 命令，操作者可以直接验证持久化状态并聚焦已解封异常。
+- Signal Interceptor 将锁定结果前置到预设列表之前，避免结果被长列表压到弹层下方。
+- 扫描过程中禁用频段预设按钮，防止定时扫描和手动调频互相打断。
+- Signal Interceptor 顶部新增 memory locks 计数，截获器自身也能表达发现进度。
+- Observer Diary 增加记忆摘要，打开时保持最新记录可见，不再自动滚到旧记录底部。

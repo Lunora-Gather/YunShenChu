@@ -18,6 +18,7 @@ const DeepTerminal: React.FC = () => {
     focusSignal,
     isPastMode,
     latestSignal,
+    observerMemory,
     playUISound,
     selectedDistrict,
     signalIntel,
@@ -158,7 +159,7 @@ const DeepTerminal: React.FC = () => {
     }
 
     if (cmd === 'help') {
-      addResponse('Available commands: WORLD_STATUS, QUERY DISTRICTS, SIGNALS, SIGNAL_PRESSURE, NEXT_LEAD, LATEST_SIGNAL, TRACE <signal>, SCAN_ENEMIES, CLEAR.');
+      addResponse('Available commands: WORLD_STATUS, QUERY DISTRICTS, SIGNALS, MEMORY, SIGNAL_PRESSURE, NEXT_LEAD, LATEST_SIGNAL, TRACE <signal>, FOCUS <signal>, SCAN_ENEMIES, CLEAR.');
       return;
     }
 
@@ -183,6 +184,11 @@ const DeepTerminal: React.FC = () => {
       return;
     }
 
+    if (cmd === 'memory' || cmd === 'observer_memory') {
+      addResponse(`OBSERVER MEMORY: ${observerMemory.canPersist ? 'PERSISTENT' : 'VOLATILE'} / restored=${observerMemory.restored ? 'YES' : 'NO'} / signals=${observerMemory.discoveredCount}/${SIGNAL_CATALOG.length} / diary=${observerMemory.diaryCount}/${observerMemory.diaryLimit} / persisted_cap=${observerMemory.persistedDiaryLimit} / latest=${latestSignal?.title ?? 'NONE'}.`);
+      return;
+    }
+
     if (cmd === 'signal_pressure' || cmd === 'pressure') {
       const impacts = signalTelemetry.activeImpacts.length
         ? signalTelemetry.activeImpacts.map((impact) => `- ${impact}`).join('\n')
@@ -202,6 +208,24 @@ const DeepTerminal: React.FC = () => {
         return;
       }
       addResponse(`${latestSignal.freq.toFixed(1)}MHz ${latestSignal.title}\n${latestSignal.message}\nEvidence: ${latestSignal.evidence}`);
+      return;
+    }
+
+    if (verb === 'focus') {
+      const signal = findSignal(target);
+      if (!signal) {
+        addResponse(`FOCUS FAILED: "${target || normalizedCommand}" is not a known anomaly key.`, 'error');
+        return;
+      }
+
+      if (!discoveredSignalSet.has(signal.id)) {
+        addResponse(`FOCUS DENIED: ${signal.title} is still sealed. Lock the frequency before focusing it.`, 'error');
+        return;
+      }
+
+      focusSignal(signal.id);
+      addDiaryEntry(`Terminal focus set to ${signal.title}.`, 'secret', selectedDistrict.name);
+      addResponse(`FOCUS SET: ${signal.title} / ${signal.freq.toFixed(1)}MHz / ${signal.mapFocus.toUpperCase()}`);
       return;
     }
 
@@ -241,6 +265,7 @@ const DeepTerminal: React.FC = () => {
     isPastMode,
     isTyping,
     latestSignal,
+    observerMemory,
     playUISound,
     selectedDistrict.name,
     signalIntel.length,
@@ -305,6 +330,7 @@ const DeepTerminal: React.FC = () => {
         <div className="terminal-quick-actions" aria-label="Terminal command shortcuts">
           <button type="button" onClick={() => submitQuickCommand('world_status')} disabled={isTyping}>world</button>
           <button type="button" onClick={() => submitQuickCommand('signals')} disabled={isTyping}>signals</button>
+          <button type="button" onClick={() => submitQuickCommand('memory')} disabled={isTyping}>memory</button>
           <button type="button" onClick={() => submitQuickCommand('latest_signal')} disabled={isTyping}>latest</button>
           <button type="button" onClick={() => submitQuickCommand('signal_pressure')} disabled={isTyping}>pressure</button>
         </div>

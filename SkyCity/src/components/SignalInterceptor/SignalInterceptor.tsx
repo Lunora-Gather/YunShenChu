@@ -21,8 +21,10 @@ const SignalInterceptor: React.FC<SignalInterceptorProps> = ({ onClose }) => {
   const loggedSignalRef = useRef<number | null>(null);
   const scanTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const resultRef = useRef<HTMLDivElement>(null);
   const { discoveredSignalIds, playUISound, registerSignalDiscovery } = useCity();
   const discoveredSignalSet = useMemo(() => new Set(discoveredSignalIds), [discoveredSignalIds]);
+  const unlockedCount = discoveredSignalIds.length;
 
   const activeSignal = useMemo(() => {
     return SIGNAL_CATALOG.find((signal) => Math.abs(signal.freq - frequency) < 0.5) ?? null;
@@ -68,6 +70,16 @@ const SignalInterceptor: React.FC<SignalInterceptorProps> = ({ onClose }) => {
   useEffect(() => {
     closeButtonRef.current?.focus();
   }, []);
+
+  useEffect(() => {
+    if (!activeSignal || !resultRef.current) return;
+
+    const scrollTimer = window.setTimeout(() => {
+      resultRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }, 120);
+
+    return () => window.clearTimeout(scrollTimer);
+  }, [activeSignal]);
 
   useEffect(() => {
     return () => {
@@ -138,7 +150,10 @@ const SignalInterceptor: React.FC<SignalInterceptorProps> = ({ onClose }) => {
         <div className="interceptor-header">
           <div className="interceptor-title" id="signal-interceptor-title">
             <Radio size={20} className="pulse-icon" />
-            <span>SIGNAL INTERCEPTOR v2.0</span>
+            <div className="interceptor-title-copy">
+              <span>SIGNAL INTERCEPTOR v2.0</span>
+              <small>{unlockedCount}/{SIGNAL_CATALOG.length} MEMORY LOCKS</small>
+            </div>
           </div>
           <button
             className="interceptor-close-btn"
@@ -215,25 +230,7 @@ const SignalInterceptor: React.FC<SignalInterceptorProps> = ({ onClose }) => {
           </small>
         </div>
 
-        <div className="signal-presets" aria-label="Known frequency presets">
-          {SIGNAL_CATALOG.map((signal) => (
-            <button
-              key={signal.id}
-              type="button"
-              className={[
-                activeSignal?.id === signal.id ? 'active' : '',
-                discoveredSignalSet.has(signal.id) ? 'discovered' : 'sealed',
-              ].filter(Boolean).join(' ')}
-              onClick={() => tuneTo(signal.freq)}
-              aria-pressed={activeSignal?.id === signal.id}
-            >
-              <span>{signal.freq.toFixed(1)}</span>
-              <strong>{discoveredSignalSet.has(signal.id) || activeSignal?.id === signal.id ? signal.title : signal.origin}</strong>
-            </button>
-          ))}
-        </div>
-
-        <div className="interceptor-results" aria-live="polite">
+        <div className="interceptor-results" ref={resultRef} aria-live="polite">
           {activeSignal ? (
             <div className="result-content interceptor-fade-in">
               <div className="result-header">
@@ -253,6 +250,25 @@ const SignalInterceptor: React.FC<SignalInterceptorProps> = ({ onClose }) => {
               <div className="static-noise" />
             </div>
           )}
+        </div>
+
+        <div className="signal-presets" aria-label="Known frequency presets">
+          {SIGNAL_CATALOG.map((signal) => (
+            <button
+              key={signal.id}
+              type="button"
+              className={[
+                activeSignal?.id === signal.id ? 'active' : '',
+                discoveredSignalSet.has(signal.id) ? 'discovered' : 'sealed',
+              ].filter(Boolean).join(' ')}
+              onClick={() => tuneTo(signal.freq)}
+              aria-pressed={activeSignal?.id === signal.id}
+              disabled={isScanning}
+            >
+              <span>{signal.freq.toFixed(1)}</span>
+              <strong>{discoveredSignalSet.has(signal.id) || activeSignal?.id === signal.id ? signal.title : signal.origin}</strong>
+            </button>
+          ))}
         </div>
       </div>
     </div>

@@ -69,6 +69,7 @@ interface CityState {
   latestSignal: SignalIntel | null;
   signalIntel: SignalIntel[];
   signalTelemetry: SignalTelemetry;
+  observerMemory: ObserverMemoryState;
   focusSignal: (id: string) => void;
   registerSignalDiscovery: (signal: SignalIntel) => void;
   world: WorldState;
@@ -92,6 +93,16 @@ interface SignalTelemetry {
   activeImpacts: string[];
   unresolvedCount: number;
   districtSignalCounts: Record<string, number>;
+}
+
+interface ObserverMemoryState {
+  canPersist: boolean;
+  restored: boolean;
+  discoveredCount: number;
+  diaryCount: number;
+  diaryLimit: number;
+  persistedDiaryLimit: number;
+  storageKey: string;
 }
 
 const CityContext = createContext<CityState | undefined>(undefined);
@@ -182,6 +193,19 @@ const readObserverStorage = (): ObserverStorageState => {
   }
 };
 
+const canUseObserverStorage = () => {
+  if (typeof window === 'undefined') return false;
+
+  try {
+    const probeKey = `${OBSERVER_STORAGE_KEY}.probe`;
+    window.localStorage.setItem(probeKey, '1');
+    window.localStorage.removeItem(probeKey);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const getStoredCounterFloor = (storage: ObserverStorageState) => {
   const diaryNumbers = storage.diary
     .map((entry) => Number(entry.id.match(/-(\d+)$/)?.[1] ?? 0))
@@ -192,6 +216,7 @@ const getStoredCounterFloor = (storage: ObserverStorageState) => {
 
 export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [storedObserverState] = useState<ObserverStorageState>(readObserverStorage);
+  const [canPersistObserverMemory] = useState(canUseObserverStorage);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [selectedDistrictId, setSelectedDistrictId] = useState(districtsData[0].id);
   const [alerts, setAlerts] = useState<SystemAlert[]>([]);
@@ -333,6 +358,16 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, [discoveredSignalIds, latestSignal, signalIntel, weather.current_condition, world.global_stats.energy_index]);
 
+  const observerMemory = useMemo<ObserverMemoryState>(() => ({
+    canPersist: canPersistObserverMemory,
+    restored: Boolean(storedObserverState.latestSignalId || storedObserverState.discoveredSignalIds.length || storedObserverState.diary.length),
+    discoveredCount: discoveredSignalIds.length,
+    diaryCount: diary.length,
+    diaryLimit: MAX_SESSION_DIARY_ENTRIES,
+    persistedDiaryLimit: MAX_PERSISTED_DIARY_ENTRIES,
+    storageKey: OBSERVER_STORAGE_KEY,
+  }), [canPersistObserverMemory, diary.length, discoveredSignalIds.length, storedObserverState]);
+
   const focusSignal = useCallback((id: string) => {
     if (discoveredSignalIdsRef.current.includes(id)) {
       setLatestSignalId(id);
@@ -383,7 +418,7 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [discoveredSignalIds]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (!canPersistObserverMemory || typeof window === 'undefined') return;
 
     const payload = {
       discoveredSignalIds,
@@ -399,7 +434,7 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } catch {
       // Local memory is a progressive enhancement; the live observer state should keep running without it.
     }
-  }, [diary, discoveredSignalIds, latestSignalId]);
+  }, [canPersistObserverMemory, diary, discoveredSignalIds, latestSignalId]);
 
   const toggleTemporalView = useCallback(() => {
     setIsPastMode(prev => {
@@ -585,6 +620,7 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       latestSignal,
       signalIntel,
       signalTelemetry,
+      observerMemory,
       focusSignal,
       registerSignalDiscovery,
       world,
