@@ -21,6 +21,7 @@ const DeepTerminal: React.FC = () => {
     observerMemory,
     playUISound,
     selectedDistrict,
+    setDistrict,
     signalIntel,
     signalTelemetry,
     weather,
@@ -33,6 +34,8 @@ const DeepTerminal: React.FC = () => {
     { type: 'response', text: 'CONNECTION ESTABLISHED VIA CLOUD-CORE-7' },
     { type: 'response', text: 'Type "help" for available commands.' },
   ]);
+  const [commandHistory, setCommandHistory] = useState<string[]>([]);
+  const [commandHistoryIndex, setCommandHistoryIndex] = useState<number | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -55,6 +58,22 @@ const DeepTerminal: React.FC = () => {
       );
     }) ?? null;
   }, []);
+
+  const findDistrict = useCallback((target: string) => {
+    const normalized = target.trim().toLowerCase().replace(/-/g, '_');
+    if (!normalized) return null;
+
+    return currentDistricts.find((district) => {
+      const aliases = [
+        district.id,
+        district.name,
+        district.name.replace(/[·\s]/g, ''),
+        district.id.replace(/_/g, ''),
+      ].map((value) => value.toLowerCase());
+
+      return aliases.some((alias) => alias === normalized || alias.includes(normalized));
+    }) ?? null;
+  }, [currentDistricts]);
 
   const summarizeUnlockedSignal = useCallback((signalId: string) => {
     const signal = SIGNAL_CATALOG.find((item) => item.id === signalId);
@@ -150,6 +169,8 @@ const DeepTerminal: React.FC = () => {
     const [verb, ...rest] = cmd.split(/\s+/);
     const target = rest.join(' ');
 
+    setCommandHistory((prev) => [normalizedCommand, ...prev.filter((item) => item !== normalizedCommand)].slice(0, 30));
+    setCommandHistoryIndex(null);
     addLine(`> ${normalizedCommand}`, 'command');
     playUISound('click');
 
@@ -159,7 +180,7 @@ const DeepTerminal: React.FC = () => {
     }
 
     if (cmd === 'help') {
-      addResponse('Available commands: WORLD_STATUS, QUERY DISTRICTS, SIGNALS, MEMORY, SIGNAL_PRESSURE, NEXT_LEAD, LATEST_SIGNAL, TRACE <signal>, FOCUS <signal>, SCAN_ENEMIES, CLEAR.');
+      addResponse('Available commands: WORLD_STATUS, QUERY DISTRICTS, GO <district>, DISTRICT <district>, SIGNALS, MEMORY, SIGNAL_PRESSURE, NEXT_LEAD, LATEST_SIGNAL, TRACE <signal>, FOCUS <signal>, SCAN_ENEMIES, CLEAR.');
       return;
     }
 
@@ -172,6 +193,19 @@ const DeepTerminal: React.FC = () => {
       addResponse(currentDistricts.map((district) => (
         `[${district.id.toUpperCase()}] ${district.name} / ${district.altitude_range[0]}-${district.altitude_range[1]}m / ${district.security_level ?? 'Standard'}`
       )).join('\n'));
+      return;
+    }
+
+    if (verb === 'go' || verb === 'district') {
+      const district = findDistrict(target);
+      if (!district) {
+        addResponse(`DISTRICT ROUTE FAILED: "${target || normalizedCommand}" is not a known sector. Run QUERY DISTRICTS for valid ids.`, 'error');
+        return;
+      }
+
+      setDistrict(district.id);
+      addDiaryEntry(`Terminal navigation set observer focus to ${district.name}.`, 'visit', district.name);
+      addResponse(`DISTRICT FOCUS SET: ${district.name} / ${district.id.toUpperCase()} / ${district.altitude_range[0]}-${district.altitude_range[1]}m.`);
       return;
     }
 
@@ -260,6 +294,7 @@ const DeepTerminal: React.FC = () => {
     addResponse,
     currentDistricts,
     discoveredSignalSet,
+    findDistrict,
     findSignal,
     focusSignal,
     isPastMode,
@@ -268,6 +303,7 @@ const DeepTerminal: React.FC = () => {
     observerMemory,
     playUISound,
     selectedDistrict.name,
+    setDistrict,
     signalIntel.length,
     signalTelemetry,
     summarizeUnlockedSignal,
@@ -293,6 +329,23 @@ const DeepTerminal: React.FC = () => {
     e.preventDefault();
     submitCurrentInput();
   };
+
+  const recallCommand = useCallback((direction: 'older' | 'newer') => {
+    if (!commandHistory.length) return;
+
+    const nextIndex = direction === 'older'
+      ? Math.min(commandHistory.length - 1, commandHistoryIndex === null ? 0 : commandHistoryIndex + 1)
+      : Math.max(-1, commandHistoryIndex === null ? -1 : commandHistoryIndex - 1);
+
+    if (nextIndex === -1) {
+      setCommandHistoryIndex(null);
+      setInput('');
+      return;
+    }
+
+    setCommandHistoryIndex(nextIndex);
+    setInput(commandHistory[nextIndex]);
+  }, [commandHistory, commandHistoryIndex]);
 
   return (
     <div className={`deep-terminal-container ${isOpen ? 'open' : 'closed'}`}>
@@ -340,11 +393,24 @@ const DeepTerminal: React.FC = () => {
             ref={inputRef}
             type="text"
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value);
+              setCommandHistoryIndex(null);
+            }}
             onKeyDown={(event) => {
               if (event.key === 'Enter') {
                 event.preventDefault();
                 submitCurrentInput();
+              }
+
+              if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                recallCommand('older');
+              }
+
+              if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                recallCommand('newer');
               }
             }}
             className="terminal-input"

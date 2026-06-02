@@ -7,6 +7,7 @@ import {
   Camera,
   Cloud,
   Compass,
+  Database,
   Eye,
   Gauge,
   History,
@@ -43,12 +44,19 @@ import TrafficVisualization from './components/TrafficVisualization/TrafficVisua
 import WeatherOverlay from './components/WeatherOverlay/WeatherOverlay';
 
 type InspectorPanel = 'district' | 'systems' | 'archive' | 'citizens';
+type ArchiveFilter = 'all' | 'unlocked' | 'sealed';
 
 const panelOptions: Array<{ id: InspectorPanel; label: string; icon: typeof Eye }> = [
   { id: 'district', label: 'District', icon: Eye },
   { id: 'systems', label: 'Systems', icon: Gauge },
   { id: 'archive', label: 'Archive', icon: BookOpen },
   { id: 'citizens', label: 'Pulse', icon: MessageSquare },
+];
+
+const archiveFilterOptions: Array<{ id: ArchiveFilter; label: string }> = [
+  { id: 'all', label: 'All' },
+  { id: 'unlocked', label: 'Unlocked' },
+  { id: 'sealed', label: 'Sealed' },
 ];
 
 const formatPopulation = (value: number) => value.toLocaleString('en-US');
@@ -73,6 +81,7 @@ function App() {
   const [isInterceptorOpen, setIsInterceptorOpen] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [activePanel, setActivePanel] = useState<InspectorPanel>('district');
+  const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>('all');
   const {
     activeDirective,
     addDiaryEntry,
@@ -84,6 +93,7 @@ function App() {
     isDay,
     isPastMode,
     latestSignal,
+    observerMemory,
     playUISound,
     selectedDistrict,
     setDistrict,
@@ -113,6 +123,14 @@ function App() {
   const discoveredSignalSet = useMemo(() => new Set(discoveredSignalIds), [discoveredSignalIds]);
   const discoveryProgress = Math.round((discoveredSignalIds.length / SIGNAL_CATALOG.length) * 100);
   const localSignalCount = signalTelemetry.districtSignalCounts[selectedDistrict.id] ?? 0;
+  const filteredArchiveSignals = useMemo(() => {
+    return SIGNAL_CATALOG.filter((signal) => {
+      const isUnlocked = discoveredSignalSet.has(signal.id);
+      if (archiveFilter === 'unlocked') return isUnlocked;
+      if (archiveFilter === 'sealed') return !isUnlocked;
+      return true;
+    });
+  }, [archiveFilter, discoveredSignalSet]);
 
   const openInterceptor = () => {
     setIsInterceptorOpen(true);
@@ -363,6 +381,31 @@ function App() {
                 <div><Gauge size={16} /><span>Directive</span><strong>{activeDirective}</strong></div>
                 <div><Radio size={16} /><span>Signal Pressure</span><strong>{signalTelemetry.pressure}% / {signalTelemetry.level}</strong></div>
               </div>
+              <div className="observer-memory-console">
+                <div className="memory-console-header">
+                  <Database size={16} />
+                  <span>Observer Memory</span>
+                  <strong>{observerMemory.canPersist ? 'persistent' : 'volatile'}</strong>
+                </div>
+                <div className="memory-stat-grid">
+                  <div>
+                    <span>Signals</span>
+                    <strong>{observerMemory.discoveredCount}/{SIGNAL_CATALOG.length}</strong>
+                  </div>
+                  <div>
+                    <span>Diary</span>
+                    <strong>{observerMemory.diaryCount}/{observerMemory.diaryLimit}</strong>
+                  </div>
+                  <div>
+                    <span>Restore</span>
+                    <strong>{observerMemory.restored ? 'yes' : 'no'}</strong>
+                  </div>
+                  <div>
+                    <span>Persist Cap</span>
+                    <strong>{observerMemory.persistedDiaryLimit}</strong>
+                  </div>
+                </div>
+              </div>
               <div className={`resonance-console level-${signalTelemetry.level}`}>
                 <div className="resonance-header">
                   <span>Resonance Matrix</span>
@@ -401,8 +444,22 @@ function App() {
                 <span>Next Lead</span>
                 <strong>{signalTelemetry.nextLead}</strong>
               </div>
+              <div className="archive-filter-bar" aria-label="Archive signal filters">
+                {archiveFilterOptions.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={archiveFilter === option.id ? 'active' : ''}
+                    onClick={() => setArchiveFilter(option.id)}
+                    aria-pressed={archiveFilter === option.id}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+                <span>{filteredArchiveSignals.length} threads</span>
+              </div>
               <div className="discovery-stack">
-                {SIGNAL_CATALOG.map((card) => {
+                {filteredArchiveSignals.map((card) => {
                   const isUnlocked = discoveredSignalSet.has(card.id);
                   const isFocused = latestSignal?.id === card.id;
                   return (

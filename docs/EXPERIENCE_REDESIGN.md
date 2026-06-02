@@ -90,3 +90,12 @@
 - 扫描过程中禁用频段预设按钮，防止定时扫描和手动调频互相打断。
 - Signal Interceptor 顶部新增 memory locks 计数，截获器自身也能表达发现进度。
 - Observer Diary 增加记忆摘要，打开时保持最新记录可见，不再自动滚到旧记录底部。
+
+## 第六轮深度优化
+
+- Systems 面板新增 Observer Memory 控制台，直接显示持久化、恢复、日记容量和信号解封进度。
+- Archive 面板新增 All/Unlocked/Sealed 过滤器，避免后续异常目录扩展后只能线性扫列表。
+- Observer Diary 新增 All/Secret/System/Visit/Discovery 过滤器，长期运行后的日志检索成本下降。
+- Deep Terminal 增加 `GO <district>` 与 `DISTRICT <district>` 命令，终端可以直接切换观察区域。
+- Deep Terminal 增加命令历史回放，方向键可以复用最近命令，减少重复输入。
+- 日记打开态层级高于底部终端，避免状态栏被终端闭合条覆盖。

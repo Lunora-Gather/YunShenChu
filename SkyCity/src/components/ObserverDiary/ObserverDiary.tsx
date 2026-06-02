@@ -1,11 +1,23 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useCity } from '../../context/CityContext';
+import type { DiaryEntry } from '../../context/CityContext';
 import { Book, ChevronDown, ChevronUp, Clock, MapPin, Search, Shield, Terminal } from 'lucide-react';
 import './ObserverDiary.css';
+
+type DiaryFilter = 'all' | DiaryEntry['type'];
+
+const diaryFilterOptions: Array<{ id: DiaryFilter; label: string }> = [
+  { id: 'all', label: 'All' },
+  { id: 'secret', label: 'Secret' },
+  { id: 'system', label: 'System' },
+  { id: 'visit', label: 'Visit' },
+  { id: 'discovery', label: 'Discovery' },
+];
 
 const ObserverDiary: React.FC = () => {
   const { diary, latestSignal, observerMemory, signalTelemetry } = useCity();
   const [isOpen, setIsOpen] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<DiaryFilter>('all');
   const entriesStartRef = useRef<HTMLDivElement>(null);
   const entryTypeCounts = useMemo(() => {
     return diary.reduce<Record<string, number>>((counts, entry) => {
@@ -13,6 +25,10 @@ const ObserverDiary: React.FC = () => {
       return counts;
     }, {});
   }, [diary]);
+  const filteredDiary = useMemo(() => {
+    if (activeFilter === 'all') return diary;
+    return diary.filter((entry) => entry.type === activeFilter);
+  }, [activeFilter, diary]);
 
   useEffect(() => {
     if (isOpen && entriesStartRef.current) {
@@ -65,17 +81,35 @@ const ObserverDiary: React.FC = () => {
             <strong>{entryTypeCounts.secret ?? 0}</strong>
           </div>
         </div>
+
+        <div className="diary-filter-bar" aria-label="Diary entry filters">
+          {diaryFilterOptions.map((option) => {
+            const count = option.id === 'all' ? diary.length : entryTypeCounts[option.id] ?? 0;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                className={activeFilter === option.id ? 'active' : ''}
+                onClick={() => setActiveFilter(option.id)}
+                aria-pressed={activeFilter === option.id}
+              >
+                <span>{option.label}</span>
+                <strong>{count}</strong>
+              </button>
+            );
+          })}
+        </div>
         
         <div className="diary-entries">
           <div ref={entriesStartRef} />
-          {diary.length === 0 ? (
+          {filteredDiary.length === 0 ? (
             <div className="empty-diary">
               <div className="empty-icon"><Search size={48} /></div>
-              <p>No observations preserved in observer memory.</p>
-              <small>Local continuity is armed for the next signal lock...</small>
+              <p>{diary.length === 0 ? 'No observations preserved in observer memory.' : `No ${activeFilter} observations in current memory.`}</p>
+              <small>{diary.length === 0 ? 'Local continuity is armed for the next signal lock...' : 'Switch filters to review other retained entries.'}</small>
             </div>
           ) : (
-            diary.map((entry) => (
+            filteredDiary.map((entry) => (
               <div key={entry.id} className={`diary-entry type-${entry.type}`}>
                 <div className="entry-header">
                   <span className="entry-timestamp">
@@ -105,7 +139,7 @@ const ObserverDiary: React.FC = () => {
             <div className="status-dot diary-pulse"></div>
             <span>{observerMemory.canPersist ? 'LOCAL MEMORY SYNC ACTIVE' : 'LOCAL MEMORY VOLATILE'}</span>
           </div>
-          <div className="timestamp-footer">{observerMemory.diaryCount}/{observerMemory.diaryLimit} ENTRIES</div>
+          <div className="timestamp-footer">{filteredDiary.length}/{observerMemory.diaryCount} SHOWN</div>
         </div>
       </div>
     </div>
