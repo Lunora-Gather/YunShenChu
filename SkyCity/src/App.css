@@ -162,9 +162,9 @@ button {
 
 .top-metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(108px, 1fr));
+  grid-template-columns: repeat(5, minmax(104px, 1fr));
   gap: 8px;
-  min-width: min(720px, 55vw);
+  min-width: min(820px, 62vw);
 }
 
 .top-metric {
@@ -194,6 +194,15 @@ button {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-size: 15px;
   white-space: nowrap;
+}
+
+.signal-pressure-tile.level-watch strong,
+.signal-pressure-tile.level-unstable strong {
+  color: var(--accent-gold);
+}
+
+.signal-pressure-tile.level-breach strong {
+  color: var(--accent-red);
 }
 
 .district-rail {
@@ -456,6 +465,12 @@ button {
   border-color: rgba(255, 189, 104, 0.4);
 }
 
+.anomaly-badge.state-breach {
+  color: var(--accent-red);
+  border-color: rgba(255, 90, 68, 0.58);
+  box-shadow: 0 0 20px rgba(255, 90, 68, 0.16);
+}
+
 .inspector-panel {
   grid-column: 3;
   grid-row: 2;
@@ -671,6 +686,88 @@ button {
   gap: 10px;
 }
 
+.resonance-console {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 200, 255, 0.18);
+  background:
+    linear-gradient(135deg, rgba(0, 200, 255, 0.08), transparent 52%),
+    rgba(255, 255, 255, 0.035);
+}
+
+.resonance-console.level-watch {
+  border-color: rgba(255, 189, 104, 0.24);
+}
+
+.resonance-console.level-unstable,
+.resonance-console.level-breach {
+  border-color: rgba(255, 90, 68, 0.32);
+  background:
+    linear-gradient(135deg, rgba(255, 90, 68, 0.08), transparent 52%),
+    rgba(255, 255, 255, 0.035);
+}
+
+.resonance-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.resonance-header span,
+.lead-board span {
+  color: var(--text-secondary);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+
+.resonance-header strong {
+  color: var(--accent-gold);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.resonance-track {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.resonance-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent-blue), var(--accent-gold), var(--accent-red));
+  box-shadow: 0 0 14px rgba(255, 189, 104, 0.32);
+}
+
+.resonance-console p {
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.impact-list {
+  display: grid;
+  gap: 7px;
+}
+
+.impact-list span {
+  padding: 7px 9px;
+  border-left: 2px solid rgba(0, 200, 255, 0.38);
+  border-radius: 0 5px 5px 0;
+  background: rgba(0, 200, 255, 0.05);
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 .compact-panel .economy-sidebar-section,
 .compact-panel .citizen-feed-container,
 .compact-panel .chronicle-container {
@@ -722,7 +819,9 @@ button {
 }
 
 .evidence-board strong,
-.evidence-board small {
+.evidence-board small,
+.evidence-board em,
+.discovery-card em {
   display: block;
 }
 
@@ -735,6 +834,30 @@ button {
 .evidence-board small {
   margin-top: 8px;
   color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.evidence-board em,
+.discovery-card em {
+  margin-top: 8px;
+  color: var(--accent-gold);
+  font-size: 11px;
+  font-style: normal;
+  line-height: 1.4;
+}
+
+.lead-board {
+  display: grid;
+  gap: 7px;
+  padding: 12px 14px;
+  border: 1px solid rgba(103, 242, 154, 0.18);
+  border-radius: 8px;
+  background: rgba(103, 242, 154, 0.045);
+}
+
+.lead-board strong {
+  color: var(--text-primary);
+  font-size: 12px;
   line-height: 1.45;
 }
 
@@ -1024,7 +1147,7 @@ button {
 
   .top-metrics {
     min-width: 0;
-    grid-template-columns: repeat(2, minmax(120px, 1fr));
+    grid-template-columns: repeat(3, minmax(112px, 1fr));
   }
 }
 

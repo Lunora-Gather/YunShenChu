@@ -263,6 +263,36 @@
   animation: glitchText 4s infinite;
 }
 
+.signal-intel-brief {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid rgba(255, 189, 104, 0.22);
+  border-radius: 8px;
+  background: rgba(255, 189, 104, 0.055);
+}
+
+.signal-intel-brief span {
+  color: var(--accent-gold);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.signal-intel-brief strong {
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.signal-intel-brief small {
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
 @keyframes glitchText {
   0% { transform: none; opacity: 1; }
   7% { transform: skew(-0.5deg, -0.9deg); opacity: 0.75; }
@@ -350,6 +380,10 @@
 
   .signal-message {
     font-size: 14px;
+  }
+
+  .signal-intel-brief {
+    padding: 10px;
   }
 
   .signal-presets button {

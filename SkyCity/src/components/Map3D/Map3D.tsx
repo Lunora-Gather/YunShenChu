@@ -5,7 +5,7 @@ import { useCity } from '../../context/CityContext';
 const buildingSlots = Array.from({ length: 8 });
 
 const Map3D: React.FC = () => {
-  const { currentDistricts, discoveredSignalIds, latestSignal, selectedDistrict, setDistrict } = useCity();
+  const { currentDistricts, discoveredSignalIds, latestSignal, selectedDistrict, setDistrict, signalTelemetry } = useCity();
   const [hoveredIslandId, setHoveredIslandId] = useState<string | null>(null);
   const [parallax, setParallax] = useState({ x: 0, y: 0 });
   const discoveredSignalSet = useMemo(() => new Set(discoveredSignalIds), [discoveredSignalIds]);
@@ -48,12 +48,13 @@ const Map3D: React.FC = () => {
 
   return (
     <div
-      className={`map-3d-container ${latestSignal ? `focus-${latestSignal.mapFocus}` : ''} ${discoveredSignalSet.has('guixu') ? 'has-guixu' : ''} ${discoveredSignalSet.has('ghost-rail') ? 'has-ghost-rail' : ''} ${discoveredSignalSet.has('core-heartbeat') ? 'has-core-heartbeat' : ''} ${discoveredSignalSet.has('abyss-whale') ? 'has-abyss-whale' : ''} ${discoveredSignalSet.has('observer-return') ? 'has-observer-return' : ''}`}
+      className={`map-3d-container resonance-${signalTelemetry.level} ${latestSignal ? `focus-${latestSignal.mapFocus}` : ''} ${discoveredSignalSet.has('guixu') ? 'has-guixu' : ''} ${discoveredSignalSet.has('ghost-rail') ? 'has-ghost-rail' : ''} ${discoveredSignalSet.has('core-heartbeat') ? 'has-core-heartbeat' : ''} ${discoveredSignalSet.has('abyss-whale') ? 'has-abyss-whale' : ''} ${discoveredSignalSet.has('observer-return') ? 'has-observer-return' : ''}`}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
     >
       <div className="map-haze depth-a" />
       <div className="map-haze depth-b" />
+      <div className="pressure-veil" aria-hidden="true" />
       <div className="scene">
         <div className="world" style={worldStyle}>
           <div className="grid-floor" />

@@ -6,7 +6,7 @@ import districtsData from '../data/districts.json';
 import entitiesData from '../data/entities.json';
 import pastWorldData from '../data/past_world.json';
 import pastDistrictsData from '../data/past_districts.json';
-import { getSignalById } from '../data/signals';
+import { getSignalById, SIGNAL_CATALOG } from '../data/signals';
 import type { SignalIntel } from '../data/signals';
 
 interface District {
@@ -33,6 +33,7 @@ type DistrictSource = Omit<District, 'population' | 'social_metrics'> & {
 type WorldState = typeof worldData;
 type WeatherState = WorldState['weather'];
 type AlertType = SystemAlert['type'];
+type ResonanceLevel = 'quiet' | 'watch' | 'unstable' | 'breach';
 
 const presentDistricts = districtsData as DistrictSource[];
 const archiveDistricts = pastDistrictsData as DistrictSource[];
@@ -63,6 +64,7 @@ interface CityState {
   discoveredSignalIds: string[];
   latestSignal: SignalIntel | null;
   signalIntel: SignalIntel[];
+  signalTelemetry: SignalTelemetry;
   focusSignal: (id: string) => void;
   registerSignalDiscovery: (signal: SignalIntel) => void;
   world: WorldState;
@@ -77,6 +79,15 @@ interface SystemAlert {
   message: string;
   type: 'info' | 'warning' | 'critical';
   timestamp: Date;
+}
+
+interface SignalTelemetry {
+  pressure: number;
+  level: ResonanceLevel;
+  nextLead: string;
+  activeImpacts: string[];
+  unresolvedCount: number;
+  districtSignalCounts: Record<string, number>;
 }
 
 const CityContext = createContext<CityState | undefined>(undefined);
@@ -180,6 +191,38 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const latestSignal = useMemo(() => {
     return latestSignalId ? getSignalById(latestSignalId) : null;
   }, [latestSignalId]);
+
+  const signalTelemetry = useMemo<SignalTelemetry>(() => {
+    const discoveredSet = new Set(discoveredSignalIds);
+    const unresolvedSignal = SIGNAL_CATALOG.find((signal) => !discoveredSet.has(signal.id));
+    const weatherPressure = weather.current_condition.toLowerCase().includes('storm') || weather.current_condition.toLowerCase().includes('pressure') ? 10 : 0;
+    const energyPressure = Math.max(0, Math.round((92 - world.global_stats.energy_index) * 1.8));
+    const signalPressure = signalIntel.reduce((total, signal) => total + signal.pressure, 0);
+    const pressure = Math.min(100, Math.max(0, signalPressure + weatherPressure + energyPressure));
+
+    const level: ResonanceLevel = pressure >= 72
+      ? 'breach'
+      : pressure >= 48
+        ? 'unstable'
+        : pressure >= 22
+          ? 'watch'
+          : 'quiet';
+
+    const districtSignalCounts = signalIntel.reduce<Record<string, number>>((counts, signal) => {
+      const key = signal.districtId ?? 'citywide';
+      counts[key] = (counts[key] ?? 0) + 1;
+      return counts;
+    }, {});
+
+    return {
+      pressure,
+      level,
+      nextLead: latestSignal?.lead ?? unresolvedSignal?.lead ?? 'All known signal threads are resolved. Maintain passive listening.',
+      activeImpacts: signalIntel.map((signal) => signal.impact).slice(0, 4),
+      unresolvedCount: SIGNAL_CATALOG.length - discoveredSignalIds.length,
+      districtSignalCounts,
+    };
+  }, [discoveredSignalIds, latestSignal, signalIntel, weather.current_condition, world.global_stats.energy_index]);
 
   const focusSignal = useCallback((id: string) => {
     if (discoveredSignalIdsRef.current.includes(id)) {
@@ -413,6 +456,7 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       discoveredSignalIds,
       latestSignal,
       signalIntel,
+      signalTelemetry,
       focusSignal,
       registerSignalDiscovery,
       world,

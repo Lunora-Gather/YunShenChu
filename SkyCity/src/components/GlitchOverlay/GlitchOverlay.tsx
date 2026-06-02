@@ -3,16 +3,22 @@ import { useCity } from '../../context/CityContext';
 import './GlitchOverlay.css';
 
 const GlitchOverlay: React.FC = () => {
-  const { world, alerts } = useCity();
+  const { world, alerts, signalTelemetry } = useCity();
   
   const isGlitching = useMemo(() => {
-    // energy_index < 85 or an active Ion Storm alert
     const lowEnergy = (world.global_stats.energy_index || 0) < 85;
     const ionStorm = alerts.some(alert => alert.message.toLowerCase().includes('ion storm'));
-    return lowEnergy || ionStorm;
-  }, [world.global_stats.energy_index, alerts]);
+    const signalBreach = signalTelemetry.level === 'breach' || signalTelemetry.pressure >= 72;
+    return lowEnergy || ionStorm || signalBreach;
+  }, [world.global_stats.energy_index, alerts, signalTelemetry.level, signalTelemetry.pressure]);
 
   if (!isGlitching) return null;
+
+  const warningReason = signalTelemetry.pressure >= 72
+    ? `SIGNAL BREACH ${signalTelemetry.pressure}%`
+    : world.global_stats.energy_index < 85
+      ? 'LOW ENERGY'
+      : 'ION STORM';
 
   return (
     <div className="glitch-overlay-root">
@@ -21,8 +27,8 @@ const GlitchOverlay: React.FC = () => {
       <div className="glitch-layer glitch-static-layer"></div>
       <div className="glitch-warning-label">
         <div className="glitch-warning-content">
-          <span className="glitch-warning-icon">⚠️</span>
-          <span className="glitch-warning-text">SIGNAL INTERFERENCE: {world.global_stats.energy_index < 85 ? 'LOW ENERGY' : 'ION STORM'}</span>
+          <span className="glitch-warning-icon">!</span>
+          <span className="glitch-warning-text">SIGNAL INTERFERENCE: {warningReason}</span>
         </div>
       </div>
       <div className="glitch-chromatic-aberration"></div>

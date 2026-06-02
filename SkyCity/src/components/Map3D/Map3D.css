@@ -32,6 +32,32 @@
   background: rgba(255, 189, 104, 0.06);
 }
 
+.pressure-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    radial-gradient(circle at 50% 54%, rgba(255, 90, 68, 0.18), transparent 36%),
+    linear-gradient(180deg, transparent, rgba(255, 90, 68, 0.08));
+  mix-blend-mode: screen;
+  transition: opacity 0.4s ease;
+}
+
+.resonance-watch .pressure-veil {
+  opacity: 0.18;
+}
+
+.resonance-unstable .pressure-veil {
+  opacity: 0.34;
+}
+
+.resonance-breach .pressure-veil {
+  opacity: 0.52;
+  animation: pressureVeilPulse 2.8s ease-in-out infinite;
+}
+
 .scene {
   position: absolute;
   inset: 0;
@@ -586,4 +612,9 @@
   0% { transform: rotate(0deg) scale(0.9); opacity: 0.35; }
   50% { transform: rotate(180deg) scale(1); opacity: 0.7; }
   100% { transform: rotate(360deg) scale(0.9); opacity: 0.35; }
+}
+
+@keyframes pressureVeilPulse {
+  0%, 100% { filter: brightness(0.9); }
+  50% { filter: brightness(1.28); }
 }

@@ -29,7 +29,7 @@ const CAMERA_PROFILES = {
 } as const;
 
 const SecurityCamera: React.FC<SecurityCameraProps> = ({ isActive, onClose }) => {
-  const { latestSignal, selectedDistrict, weather, world } = useCity();
+  const { latestSignal, selectedDistrict, signalTelemetry, weather, world } = useCity();
   const [time, setTime] = useState(new Date());
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -107,6 +107,7 @@ const SecurityCamera: React.FC<SecurityCameraProps> = ({ isActive, onClose }) =>
           <span>{relevantSignal ? 'ANOMALY CROSS-LINK' : 'LIVE SYNTHETIC FEED'}</span>
           <strong>{relevantSignal?.title ?? profile.subject}</strong>
           <small>{relevantSignal?.evidence ?? profile.feed}</small>
+          <em>{relevantSignal?.containment ?? `Signal pressure ${signalTelemetry.pressure}% / ${signalTelemetry.level}`}</em>
         </div>
       </div>
 
@@ -115,6 +116,7 @@ const SecurityCamera: React.FC<SecurityCameraProps> = ({ isActive, onClose }) =>
           <span>ENERGY {world.global_stats.energy_index.toFixed(1)}%</span>
           <span>WIND {weather.wind_speed}m/s</span>
           <span>HUM {weather.humidity}%</span>
+          <span>SIGNAL {signalTelemetry.pressure}%</span>
         </div>
         <div>{time.toLocaleDateString()} {time.toLocaleTimeString()}</div>
       </div>

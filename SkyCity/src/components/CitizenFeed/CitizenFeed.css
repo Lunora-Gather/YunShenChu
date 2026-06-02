@@ -22,6 +22,19 @@
   gap: 8px;
 }
 
+.feed-header span {
+  flex: 1;
+}
+
+.feed-header strong {
+  color: var(--accent-gold);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
 .feed-list {
   flex: 1;
   overflow-y: auto;
@@ -38,6 +51,18 @@
   padding: 10px;
   border: 1px solid rgba(255, 255, 255, 0.05);
   animation: citizenFeedSlideInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.feed-item.tone-signal {
+  border-color: rgba(255, 189, 104, 0.34);
+  background:
+    linear-gradient(135deg, rgba(255, 189, 104, 0.08), transparent 54%),
+    rgba(255, 255, 255, 0.035);
+  box-shadow: inset 2px 0 0 rgba(255, 189, 104, 0.72);
+}
+
+.feed-item.tone-signal .user-name {
+  color: var(--accent-gold);
 }
 
 .item-user {

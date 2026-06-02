@@ -21,6 +21,7 @@ const DeepTerminal: React.FC = () => {
     playUISound,
     selectedDistrict,
     signalIntel,
+    signalTelemetry,
     weather,
     world,
   } = useCity();
@@ -157,12 +158,12 @@ const DeepTerminal: React.FC = () => {
     }
 
     if (cmd === 'help') {
-      addResponse('Available commands: WORLD_STATUS, QUERY DISTRICTS, SIGNALS, LATEST_SIGNAL, TRACE <signal>, SCAN_ENEMIES, CLEAR.');
+      addResponse('Available commands: WORLD_STATUS, QUERY DISTRICTS, SIGNALS, SIGNAL_PRESSURE, NEXT_LEAD, LATEST_SIGNAL, TRACE <signal>, SCAN_ENEMIES, CLEAR.');
       return;
     }
 
     if (cmd === 'world_status') {
-      addResponse(`WORLD STATUS: ${world.global_stats.status.toUpperCase()} / mode=${isPastMode ? 'FOUNDATION_ARCHIVE' : 'LIVE_CITY'} / energy=${world.global_stats.energy_index.toFixed(1)}% / population=${world.global_stats.total_population.toLocaleString('en-US')} / weather=${weather.current_condition} / directive=${activeDirective}.`);
+      addResponse(`WORLD STATUS: ${world.global_stats.status.toUpperCase()} / mode=${isPastMode ? 'FOUNDATION_ARCHIVE' : 'LIVE_CITY'} / energy=${world.global_stats.energy_index.toFixed(1)}% / population=${world.global_stats.total_population.toLocaleString('en-US')} / weather=${weather.current_condition} / directive=${activeDirective} / signal_pressure=${signalTelemetry.pressure}% ${signalTelemetry.level}.`);
       return;
     }
 
@@ -179,6 +180,19 @@ const DeepTerminal: React.FC = () => {
         return `${unlocked ? 'UNLOCKED' : 'SEALED'} / ${signal.id} / ${unlocked ? summarizeUnlockedSignal(signal.id) : 'sweep interceptor bands for evidence'}`;
       });
       addResponse(`SIGNAL MEMORY ${signalIntel.length}/${SIGNAL_CATALOG.length}\n${signalLines.join('\n')}`);
+      return;
+    }
+
+    if (cmd === 'signal_pressure' || cmd === 'pressure') {
+      const impacts = signalTelemetry.activeImpacts.length
+        ? signalTelemetry.activeImpacts.map((impact) => `- ${impact}`).join('\n')
+        : '- No active anomaly impact.';
+      addResponse(`SIGNAL PRESSURE: ${signalTelemetry.pressure}% / ${signalTelemetry.level.toUpperCase()}\nSEALED THREADS: ${signalTelemetry.unresolvedCount}\nACTIVE IMPACTS:\n${impacts}`);
+      return;
+    }
+
+    if (cmd === 'next_lead' || cmd === 'lead') {
+      addResponse(`NEXT LEAD: ${signalTelemetry.nextLead}`);
       return;
     }
 
@@ -230,6 +244,7 @@ const DeepTerminal: React.FC = () => {
     playUISound,
     selectedDistrict.name,
     signalIntel.length,
+    signalTelemetry,
     summarizeUnlockedSignal,
     weather.current_condition,
     world.global_stats.energy_index,
@@ -291,7 +306,7 @@ const DeepTerminal: React.FC = () => {
           <button type="button" onClick={() => submitQuickCommand('world_status')} disabled={isTyping}>world</button>
           <button type="button" onClick={() => submitQuickCommand('signals')} disabled={isTyping}>signals</button>
           <button type="button" onClick={() => submitQuickCommand('latest_signal')} disabled={isTyping}>latest</button>
-          <button type="button" onClick={() => submitQuickCommand(latestSignal ? `trace ${latestSignal.id}` : 'scan_enemies')} disabled={isTyping}>trace</button>
+          <button type="button" onClick={() => submitQuickCommand('signal_pressure')} disabled={isTyping}>pressure</button>
         </div>
         <form onSubmit={handleCommand} className="terminal-input-form">
           <span className="terminal-prompt">&gt;</span>
@@ -316,7 +331,7 @@ const DeepTerminal: React.FC = () => {
       </div>
       <div className="terminal-footer">
         <span>ZONE: {selectedDistrict.id.toUpperCase()}</span>
-        <span>SIGNALS: {signalIntel.length}/{SIGNAL_CATALOG.length}</span>
+        <span>PRESSURE: {signalTelemetry.pressure}%</span>
         <span>MODE: {isPastMode ? 'ARCHIVE' : 'LIVE'}</span>
       </div>
     </div>

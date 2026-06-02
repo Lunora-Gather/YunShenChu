@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import './CitizenFeed.css';
 import { MessageSquare, Heart, Share2 } from 'lucide-react';
+import { useCity } from '../../context/CityContext';
+import type { SignalIntel } from '../../data/signals';
 
 interface FeedItem {
   id: string;
@@ -9,6 +11,7 @@ interface FeedItem {
   content: string;
   timestamp: string;
   likes: number;
+  tone?: 'normal' | 'signal';
 }
 
 const CITIZEN_NAMES = ['SkyWalker', 'CloudDrifter', 'MistRunner', 'AeroPilot', 'VaporArtist', 'NimbusFan'];
@@ -33,32 +36,45 @@ const MESSAGES = [
 
 let feedCounter = 0;
 
-const generateItem = (): FeedItem => {
+const generateItem = (signal?: SignalIntel): FeedItem => {
   feedCounter += 1;
   const user = CITIZEN_NAMES[Math.floor(Math.random() * CITIZEN_NAMES.length)];
   return {
     id: `feed-${feedCounter}`,
     user,
     handle: `@${user.toLowerCase()}`,
-    content: MESSAGES[Math.floor(MESSAGES.length * Math.random())],
+    content: signal?.citizenReport ?? MESSAGES[Math.floor(MESSAGES.length * Math.random())],
     timestamp: 'Just now',
-    likes: Math.floor(Math.random() * 50),
+    likes: signal ? 70 + Math.floor(Math.random() * 80) : Math.floor(Math.random() * 50),
+    tone: signal ? 'signal' : 'normal',
   };
 };
 
 const createInitialFeed = () => Array.from({ length: 5 }).map(() => generateItem());
 
 const CitizenFeed: React.FC = () => {
+  const { latestSignal, signalIntel, signalTelemetry } = useCity();
   const [feed, setFeed] = useState<FeedItem[]>(createInitialFeed);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setFeed((prev) => [...prev.slice(-10), generateItem()]);
+      const shouldEchoSignal = signalIntel.length > 0 && Math.random() < 0.38;
+      const signal = shouldEchoSignal ? signalIntel[Math.floor(Math.random() * signalIntel.length)] : undefined;
+      setFeed((prev) => [...prev.slice(-10), generateItem(signal)]);
     }, 5000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [signalIntel]);
+
+  useEffect(() => {
+    if (!latestSignal) return;
+    const timer = window.setTimeout(() => {
+      setFeed((prev) => [...prev.slice(-10), generateItem(latestSignal)]);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [latestSignal]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -69,11 +85,13 @@ const CitizenFeed: React.FC = () => {
   return (
     <div className="citizen-feed-container glass-panel">
       <div className="feed-header">
-        <MessageSquare size={14} /> CITIZEN FEED
+        <MessageSquare size={14} />
+        <span>CITIZEN FEED</span>
+        <strong>{signalTelemetry.pressure}% signal pressure</strong>
       </div>
       <div className="feed-list" ref={scrollRef}>
         {feed.map((item) => (
-          <div key={item.id} className="feed-item">
+          <div key={item.id} className={`feed-item tone-${item.tone ?? 'normal'}`}>
             <div className="item-user">
               <span className="user-name">{item.user}</span>
               <span className="user-handle">{item.handle}</span>

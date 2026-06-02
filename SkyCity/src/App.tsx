@@ -88,6 +88,7 @@ function App() {
     selectedDistrict,
     setDistrict,
     signalIntel,
+    signalTelemetry,
     weather,
     world,
   } = useCity();
@@ -96,9 +97,10 @@ function App() {
   const clockLabel = currentTime.toLocaleTimeString([], { hour12: false });
   const anomalyState = useMemo(() => {
     const weatherRisk = weather.current_condition.toLowerCase().includes('storm') || weather.current_condition.toLowerCase().includes('ion');
-    if (world.global_stats.energy_index < 85 || weatherRisk) return 'ELEVATED';
+    if (signalTelemetry.level === 'breach') return 'BREACH';
+    if (world.global_stats.energy_index < 85 || weatherRisk || signalTelemetry.level === 'unstable') return 'ELEVATED';
     return isPastMode ? 'ARCHIVE' : 'STABLE';
-  }, [isPastMode, weather.current_condition, world.global_stats.energy_index]);
+  }, [isPastMode, signalTelemetry.level, weather.current_condition, world.global_stats.energy_index]);
 
   const socialMetrics = useMemo(() => {
     return Object.entries(selectedDistrict.social_metrics).map(([key, value]) => ({
@@ -110,6 +112,7 @@ function App() {
 
   const discoveredSignalSet = useMemo(() => new Set(discoveredSignalIds), [discoveredSignalIds]);
   const discoveryProgress = Math.round((discoveredSignalIds.length / SIGNAL_CATALOG.length) * 100);
+  const localSignalCount = signalTelemetry.districtSignalCounts[selectedDistrict.id] ?? 0;
 
   const openInterceptor = () => {
     setIsInterceptorOpen(true);
@@ -199,6 +202,11 @@ function App() {
               <Activity size={13} />
               <span>Clock</span>
               <strong>{clockLabel}</strong>
+            </div>
+            <div className={`top-metric signal-pressure-tile level-${signalTelemetry.level}`}>
+              <Radio size={13} />
+              <span>Signal</span>
+              <strong>{signalTelemetry.pressure}% {signalTelemetry.level}</strong>
             </div>
           </div>
         </header>
@@ -313,6 +321,11 @@ function App() {
                   <span>Network</span>
                   <strong>{currentDistricts.length} sectors</strong>
                 </div>
+                <div>
+                  <Radio size={16} />
+                  <span>Local Echoes</span>
+                  <strong>{localSignalCount} locked</strong>
+                </div>
               </div>
 
               <div className="social-grid">
@@ -348,6 +361,22 @@ function App() {
                 <div><Cloud size={16} /><span>Weather</span><strong>{weather.current_condition}</strong></div>
                 <div><Route size={16} /><span>Routes</span><strong>{world.traffic_system.active_routes}</strong></div>
                 <div><Gauge size={16} /><span>Directive</span><strong>{activeDirective}</strong></div>
+                <div><Radio size={16} /><span>Signal Pressure</span><strong>{signalTelemetry.pressure}% / {signalTelemetry.level}</strong></div>
+              </div>
+              <div className={`resonance-console level-${signalTelemetry.level}`}>
+                <div className="resonance-header">
+                  <span>Resonance Matrix</span>
+                  <strong>{signalTelemetry.unresolvedCount} sealed threads</strong>
+                </div>
+                <div className="resonance-track" aria-label={`Signal pressure ${signalTelemetry.pressure}%`}>
+                  <span style={{ width: `${signalTelemetry.pressure}%` }} />
+                </div>
+                <p>{signalTelemetry.nextLead}</p>
+                <div className="impact-list">
+                  {signalTelemetry.activeImpacts.length ? signalTelemetry.activeImpacts.map((impact) => (
+                    <span key={impact}>{impact}</span>
+                  )) : <span>No active anomaly impact. Passive listening only.</span>}
+                </div>
               </div>
               <EconomyDashboard />
             </div>
@@ -366,6 +395,11 @@ function App() {
                 <span>Latest Lock</span>
                 <strong>{latestSignal?.title ?? 'No signal locked'}</strong>
                 <small>{latestSignal?.message ?? 'Open the interceptor and sweep the hidden bands.'}</small>
+                {latestSignal && <em>{latestSignal.containment}</em>}
+              </div>
+              <div className="lead-board">
+                <span>Next Lead</span>
+                <strong>{signalTelemetry.nextLead}</strong>
               </div>
               <div className="discovery-stack">
                 {SIGNAL_CATALOG.map((card) => {
@@ -381,7 +415,8 @@ function App() {
                     >
                       <span>{isUnlocked ? `${card.freq.toFixed(1)} MHz / ${card.origin}` : 'LOCKED FREQUENCY'}</span>
                       <strong>{card.title}</strong>
-                      <small>{isUnlocked ? card.evidence : 'Signal lock required before this file can be trusted.'}</small>
+                      <small>{isUnlocked ? card.evidence : card.lead}</small>
+                      {isUnlocked && <em>{card.impact}</em>}
                     </button>
                   );
                 })}
@@ -410,7 +445,7 @@ function App() {
           <div>
             <Radio size={15} />
             <span>Signal Memory</span>
-            <strong>{signalIntel.length ? `${signalIntel.length}/${SIGNAL_CATALOG.length} ${latestSignal?.title ?? 'locked'}` : weather.current_condition}</strong>
+            <strong>{signalIntel.length ? `${signalTelemetry.pressure}% ${latestSignal?.title ?? 'locked'}` : weather.current_condition}</strong>
           </div>
         </section>
       </main>

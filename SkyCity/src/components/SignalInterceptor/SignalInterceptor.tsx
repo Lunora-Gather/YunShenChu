@@ -210,6 +210,11 @@ const SignalInterceptor: React.FC<SignalInterceptorProps> = ({ onClose }) => {
                 <Lock size={14} className="lock-icon" />
               </div>
               <p className="signal-message">{activeSignal.message}</p>
+              <div className="signal-intel-brief">
+                <span>next lead</span>
+                <strong>{activeSignal.lead}</strong>
+                <small>{activeSignal.containment}</small>
+              </div>
             </div>
           ) : (
             <div className="no-signal">

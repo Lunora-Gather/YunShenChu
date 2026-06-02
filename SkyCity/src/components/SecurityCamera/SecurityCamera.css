@@ -401,6 +401,13 @@
   line-height: 1.45;
 }
 
+.camera-caption em {
+  color: #ffbd68;
+  font-size: 11px;
+  font-style: normal;
+  line-height: 1.35;
+}
+
 .camera-footer {
   display: flex;
   justify-content: space-between;
@@ -522,6 +529,10 @@
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
     font-size: 11px;
+  }
+
+  .camera-caption em {
+    display: none;
   }
 
   .camera-footer {
