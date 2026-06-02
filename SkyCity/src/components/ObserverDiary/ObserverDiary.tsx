@@ -45,8 +45,8 @@ const ObserverDiary: React.FC = () => {
           {diary.length === 0 ? (
             <div className="empty-diary">
               <div className="empty-icon"><Search size={48} /></div>
-              <p>No observations recorded in current session.</p>
-              <small>System ready for data acquisition...</small>
+              <p>No observations preserved in observer memory.</p>
+              <small>Local continuity is armed for the next signal lock...</small>
             </div>
           ) : (
             diary.map((entry) => (
@@ -78,7 +78,7 @@ const ObserverDiary: React.FC = () => {
         <div className="diary-status-bar">
           <div className="status-indicator-group">
             <div className="status-dot diary-pulse"></div>
-            <span>LIVE SYNC ACTIVE</span>
+            <span>LOCAL MEMORY SYNC ACTIVE</span>
           </div>
           <div className="timestamp-footer">{new Date().toDateString()}</div>
         </div>

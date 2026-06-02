@@ -192,6 +192,18 @@
   cursor: not-allowed;
 }
 
+.scan-hint {
+  display: block;
+  margin-top: -12px;
+  color: var(--text-secondary);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  line-height: 1.4;
+  text-align: center;
+  text-transform: uppercase;
+}
+
 .signal-presets {
   display: grid;
   gap: 8px;
@@ -218,6 +230,19 @@
   border-color: rgba(0, 200, 255, 0.5);
   background: rgba(0, 200, 255, 0.1);
   color: var(--text-primary);
+}
+
+.signal-presets button.sealed {
+  border-style: dashed;
+}
+
+.signal-presets button.discovered {
+  border-color: rgba(85, 255, 184, 0.16);
+  background: rgba(85, 255, 184, 0.045);
+}
+
+.signal-presets button.discovered span {
+  color: #55ffb8;
 }
 
 .signal-presets span {

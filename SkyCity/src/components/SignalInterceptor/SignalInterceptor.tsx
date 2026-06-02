@@ -17,6 +17,7 @@ const barHeight = (frequency: number, index: number, isLocked: boolean) => {
 const SignalInterceptor: React.FC<SignalInterceptorProps> = ({ onClose }) => {
   const [frequency, setFrequency] = useState(100.0);
   const [isScanning, setIsScanning] = useState(false);
+  const [scanTargetId, setScanTargetId] = useState<string | null>(null);
   const loggedSignalRef = useRef<number | null>(null);
   const scanTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -32,6 +33,21 @@ const SignalInterceptor: React.FC<SignalInterceptorProps> = ({ onClose }) => {
       Math.abs(signal.freq - frequency) < Math.abs(nearest.freq - frequency) ? signal : nearest
     ), SIGNAL_CATALOG[0]);
   }, [frequency]);
+
+  const nextSealedSignal = useMemo(() => {
+    return SIGNAL_CATALOG.find((signal) => !discoveredSignalSet.has(signal.id)) ?? null;
+  }, [discoveredSignalSet]);
+
+  const scanTargetSignal = useMemo(() => {
+    if (nextSealedSignal) return nextSealedSignal;
+
+    const nearestIndex = SIGNAL_CATALOG.findIndex((signal) => signal.id === nearestSignal.id);
+    return SIGNAL_CATALOG[(nearestIndex + 1) % SIGNAL_CATALOG.length];
+  }, [nearestSignal.id, nextSealedSignal]);
+
+  const currentScanTarget = useMemo(() => {
+    return scanTargetId ? SIGNAL_CATALOG.find((signal) => signal.id === scanTargetId) ?? null : null;
+  }, [scanTargetId]);
 
   const lockStrength = activeSignal
     ? 100
@@ -54,6 +70,14 @@ const SignalInterceptor: React.FC<SignalInterceptorProps> = ({ onClose }) => {
   }, []);
 
   useEffect(() => {
+    return () => {
+      if (scanTimerRef.current) {
+        clearInterval(scanTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         onClose();
@@ -73,12 +97,7 @@ const SignalInterceptor: React.FC<SignalInterceptorProps> = ({ onClose }) => {
     };
 
     window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      if (scanTimerRef.current) {
-        clearInterval(scanTimerRef.current);
-      }
-    };
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isScanning, onClose, playUISound]);
 
   const tuneTo = (nextFrequency: number) => {
@@ -93,7 +112,8 @@ const SignalInterceptor: React.FC<SignalInterceptorProps> = ({ onClose }) => {
 
     setIsScanning(true);
     playUISound('click');
-    const target = SIGNAL_CATALOG[Math.floor(Math.random() * SIGNAL_CATALOG.length)].freq;
+    setScanTargetId(scanTargetSignal.id);
+    const target = scanTargetSignal.freq;
 
     scanTimerRef.current = setInterval(() => {
       setFrequency((prev) => {
@@ -104,6 +124,7 @@ const SignalInterceptor: React.FC<SignalInterceptorProps> = ({ onClose }) => {
             scanTimerRef.current = null;
           }
           setIsScanning(false);
+          setScanTargetId(null);
           return target;
         }
         return prev + diff * 0.1;
@@ -185,6 +206,13 @@ const SignalInterceptor: React.FC<SignalInterceptorProps> = ({ onClose }) => {
             {isScanning ? <Loader2 className="interceptor-spin" /> : <Wifi size={18} />}
             {isScanning ? 'SCANNING...' : 'AUTO-SCAN'}
           </button>
+          <small className="scan-hint">
+            {isScanning && currentScanTarget
+              ? `scanning band: ${currentScanTarget.origin} / ${currentScanTarget.freq.toFixed(1)} MHz`
+              : nextSealedSignal
+              ? `priority band: ${nextSealedSignal.origin} / ${nextSealedSignal.freq.toFixed(1)} MHz`
+              : `all catalog bands known: cycling ${scanTargetSignal.origin}`}
+          </small>
         </div>
 
         <div className="signal-presets" aria-label="Known frequency presets">
@@ -192,7 +220,10 @@ const SignalInterceptor: React.FC<SignalInterceptorProps> = ({ onClose }) => {
             <button
               key={signal.id}
               type="button"
-              className={activeSignal?.id === signal.id ? 'active' : ''}
+              className={[
+                activeSignal?.id === signal.id ? 'active' : '',
+                discoveredSignalSet.has(signal.id) ? 'discovered' : 'sealed',
+              ].filter(Boolean).join(' ')}
               onClick={() => tuneTo(signal.freq)}
               aria-pressed={activeSignal?.id === signal.id}
             >

@@ -37,6 +37,10 @@ type ResonanceLevel = 'quiet' | 'watch' | 'unstable' | 'breach';
 
 const presentDistricts = districtsData as DistrictSource[];
 const archiveDistricts = pastDistrictsData as DistrictSource[];
+const OBSERVER_STORAGE_KEY = 'yunshenchu.observer.v2';
+const ALERT_DEDUPE_WINDOW_MS = 6500;
+const MAX_SESSION_DIARY_ENTRIES = 80;
+const MAX_PERSISTED_DIARY_ENTRIES = 48;
 
 export interface DiaryEntry {
   id: string;
@@ -92,17 +96,113 @@ interface SignalTelemetry {
 
 const CityContext = createContext<CityState | undefined>(undefined);
 
+interface PersistedDiaryEntry extends Omit<DiaryEntry, 'timestamp'> {
+  timestamp: string;
+}
+
+interface ObserverStorageState {
+  discoveredSignalIds: string[];
+  latestSignalId: string | null;
+  diary: DiaryEntry[];
+}
+
+const emptyObserverStorage: ObserverStorageState = {
+  discoveredSignalIds: [],
+  latestSignalId: null,
+  diary: [],
+};
+
+const isDiaryType = (value: unknown): value is DiaryEntry['type'] => (
+  value === 'visit' || value === 'discovery' || value === 'system' || value === 'secret'
+);
+
+const normalizeSignalIds = (value: unknown) => {
+  if (!Array.isArray(value)) return [];
+
+  return Array.from(new Set(value))
+    .filter((id): id is string => typeof id === 'string' && Boolean(getSignalById(id)));
+};
+
+const parseDiaryEntry = (value: unknown): DiaryEntry | null => {
+  if (!value || typeof value !== 'object') return null;
+
+  const entry = value as Partial<PersistedDiaryEntry>;
+  if (
+    typeof entry.id !== 'string' ||
+    typeof entry.message !== 'string' ||
+    typeof entry.timestamp !== 'string' ||
+    !isDiaryType(entry.type)
+  ) {
+    return null;
+  }
+
+  const timestamp = new Date(entry.timestamp);
+  if (Number.isNaN(timestamp.getTime())) return null;
+
+  return {
+    id: entry.id,
+    message: entry.message,
+    timestamp,
+    type: entry.type,
+    location: typeof entry.location === 'string' ? entry.location : undefined,
+  };
+};
+
+const readObserverStorage = (): ObserverStorageState => {
+  if (typeof window === 'undefined') return emptyObserverStorage;
+
+  try {
+    const rawStorage = window.localStorage.getItem(OBSERVER_STORAGE_KEY);
+    if (!rawStorage) return emptyObserverStorage;
+
+    const parsed = JSON.parse(rawStorage) as Partial<{
+      discoveredSignalIds: unknown;
+      latestSignalId: unknown;
+      diary: unknown;
+    }>;
+
+    const discoveredSignalIds = normalizeSignalIds(parsed.discoveredSignalIds);
+    const latestSignalId = typeof parsed.latestSignalId === 'string' && discoveredSignalIds.includes(parsed.latestSignalId)
+      ? parsed.latestSignalId
+      : discoveredSignalIds[0] ?? null;
+    const diary = Array.isArray(parsed.diary)
+      ? parsed.diary
+        .map(parseDiaryEntry)
+        .filter((entry): entry is DiaryEntry => Boolean(entry))
+        .slice(0, MAX_PERSISTED_DIARY_ENTRIES)
+      : [];
+
+    return {
+      discoveredSignalIds,
+      latestSignalId,
+      diary,
+    };
+  } catch {
+    return emptyObserverStorage;
+  }
+};
+
+const getStoredCounterFloor = (storage: ObserverStorageState) => {
+  const diaryNumbers = storage.diary
+    .map((entry) => Number(entry.id.match(/-(\d+)$/)?.[1] ?? 0))
+    .filter(Number.isFinite);
+
+  return Math.max(0, ...diaryNumbers);
+};
+
 export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [storedObserverState] = useState<ObserverStorageState>(readObserverStorage);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [selectedDistrictId, setSelectedDistrictId] = useState(districtsData[0].id);
   const [alerts, setAlerts] = useState<SystemAlert[]>([]);
-  const [diary, setDiary] = useState<DiaryEntry[]>([]);
+  const [diary, setDiary] = useState<DiaryEntry[]>(storedObserverState.diary);
   const [lastSoundTrigger, setLastSoundTrigger] = useState<{ type: 'beep' | 'click'; timestamp: number } | null>(null);
   const [isPastMode, setIsPastMode] = useState(false);
-  const [discoveredSignalIds, setDiscoveredSignalIds] = useState<string[]>([]);
-  const [latestSignalId, setLatestSignalId] = useState<string | null>(null);
-  const idCounterRef = useRef(0);
-  const discoveredSignalIdsRef = useRef<string[]>([]);
+  const [discoveredSignalIds, setDiscoveredSignalIds] = useState<string[]>(storedObserverState.discoveredSignalIds);
+  const [latestSignalId, setLatestSignalId] = useState<string | null>(storedObserverState.latestSignalId);
+  const idCounterRef = useRef(getStoredCounterFloor(storedObserverState));
+  const discoveredSignalIdsRef = useRef<string[]>(storedObserverState.discoveredSignalIds);
+  const alertDedupeRef = useRef<Record<string, number>>({});
 
   const nextId = useCallback((prefix: string) => {
     idCounterRef.current += 1;
@@ -163,8 +263,17 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const addAlert = useCallback((message: string, type: AlertType = 'info') => {
+    const now = Date.now();
+    const dedupeKey = `${type}:${message}`;
+    const lastShownAt = alertDedupeRef.current[dedupeKey] ?? 0;
+
+    if (now - lastShownAt < ALERT_DEDUPE_WINDOW_MS) {
+      return;
+    }
+
+    alertDedupeRef.current[dedupeKey] = now;
     const id = nextId('alert');
-    const newAlert = { id, message, type, timestamp: new Date() };
+    const newAlert = { id, message, type, timestamp: new Date(now) };
     setAlerts(prev => [newAlert, ...prev].slice(0, 5));
     
     // Auto-remove alert after 10 seconds
@@ -179,7 +288,7 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       location,
       message
     };
-    setDiary(prev => [entry, ...prev]);
+    setDiary(prev => [entry, ...prev].slice(0, MAX_SESSION_DIARY_ENTRIES));
   }, [nextId]);
 
   const signalIntel = useMemo(() => {
@@ -272,6 +381,25 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     discoveredSignalIdsRef.current = discoveredSignalIds;
   }, [discoveredSignalIds]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const payload = {
+      discoveredSignalIds,
+      latestSignalId,
+      diary: diary.slice(0, MAX_PERSISTED_DIARY_ENTRIES).map((entry) => ({
+        ...entry,
+        timestamp: entry.timestamp.toISOString(),
+      })),
+    };
+
+    try {
+      window.localStorage.setItem(OBSERVER_STORAGE_KEY, JSON.stringify(payload));
+    } catch {
+      // Local memory is a progressive enhancement; the live observer state should keep running without it.
+    }
+  }, [diary, discoveredSignalIds, latestSignalId]);
 
   const toggleTemporalView = useCallback(() => {
     setIsPastMode(prev => {
