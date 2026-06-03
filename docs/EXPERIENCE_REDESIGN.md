@@ -131,6 +131,8 @@
 - 全局 Next Action 同时覆盖区域、终端、摄像头和 Diary 动作，Guixu 与 Observer Return 均可从底部入口完成闭环。
 - Archive 新增搜索输入，覆盖异常 id、标题、来源、线索、证据、影响和调查动作文案。
 - Archive 增加空结果态，搜索或过滤没有命中时不再留下空白列表。
+- 首次进入且没有本地信号记忆时，城市舷窗显示 First Sweep 启动简报，并同步高亮顶部与底部扫描入口。
+- GitHub Pages 部署工作流已接入，Vite 构建改为相对资源路径，仓库根 README 和子项目 README 均指向在线试玩与本地运行方式。
 
 ## 最终轮验证
 
@@ -142,3 +144,12 @@
 - 浏览器验证 Archive 搜索可命中已解锁和未解锁异常，搜索空结果态正常显示，清空按钮可恢复列表。
 - 移动端 390x844 验证主界面与 Signal Strip 无横向溢出。
 - 浏览器验证未捕获应用 console error。
+
+## 发布收束验证
+
+- `npm run lint` 通过。
+- `npm run build` 通过。
+- 检查 `dist/index.html`：脚本、样式和 favicon 均为相对路径。
+- 浏览器验证无本地记忆的首次进入：First Sweep 简报可见，点击 `Start signal sweep` 能打开 Signal Interceptor。
+- 浏览器验证已有本地信号记忆：First Sweep 简报消失，Signal Strip 显示 Next Action 与 Signal Memory。
+- 移动端 390x844 验证首次进入无横向溢出，启动简报不遮挡顶部区域读数和底部状态条。

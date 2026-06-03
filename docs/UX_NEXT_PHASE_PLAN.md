@@ -199,5 +199,6 @@
 ## 审核结论占位
 
 - 审核状态：已按用户授权进入实现。
-- 已实施范围：Phase 1 的部分 UI 稳定性、Phase 2 前半段的调查状态模型、v3 持久化迁移、Systems/Archive/Diary/Terminal 联动、终端命令自动执行、Diary 独立动作完成、底部全局 Next Action 入口、Archive 搜索与空结果态、扩展浏览器回归验证。
+- 已实施范围：Phase 1 的部分 UI 稳定性、Phase 2 前半段的调查状态模型、v3 持久化迁移、Systems/Archive/Diary/Terminal 联动、终端命令自动执行、Diary 独立动作完成、底部全局 Next Action 入口、Archive 搜索与空结果态、首次进入启动简报、GitHub Pages 自动部署配置、扩展浏览器回归验证。
+- 发布状态：Vite 已配置相对资源路径，根 README 与子项目 README 已补齐在线试玩、本地运行和构建说明，推送到 main 后由 GitHub Actions 构建并部署 Pages。
 - 下一步仍不建议现在做：大规模重写 3D 地图、引入新设计库、重构为多路由应用。

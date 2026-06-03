@@ -129,6 +129,8 @@ function App() {
   }, [selectedDistrict.social_metrics]);
 
   const discoveredSignalSet = useMemo(() => new Set(discoveredSignalIds), [discoveredSignalIds]);
+  const hasSignalMemory = signalIntel.length > 0;
+  const scanActionLabel = hasSignalMemory ? 'Scan hidden frequencies' : 'Start signal sweep';
   const discoveryProgress = Math.round((discoveredSignalIds.length / SIGNAL_CATALOG.length) * 100);
   const localSignalCount = signalTelemetry.districtSignalCounts[selectedDistrict.id] ?? 0;
   const filteredArchiveSignals = useMemo(() => {
@@ -363,9 +365,9 @@ function App() {
               <Camera size={16} />
               Camera
             </button>
-            <button className="control-btn glow-on-hover" type="button" onClick={openInterceptor}>
+            <button className={`control-btn glow-on-hover signal-launch ${hasSignalMemory ? '' : 'is-awaiting'}`} type="button" onClick={openInterceptor}>
               <AudioLines size={16} />
-              Signals
+              {hasSignalMemory ? 'Signals' : 'Start'}
             </button>
           </div>
 
@@ -391,6 +393,26 @@ function App() {
             <AlertTriangle size={15} />
             <span>{anomalyState}</span>
           </div>
+
+          {!hasSignalMemory && (
+            <div className="launch-brief" aria-label="First signal sweep brief">
+              <div className="launch-brief-kicker">
+                <Sparkles size={14} />
+                <span>First Sweep</span>
+              </div>
+              <strong>Signal memory is empty</strong>
+              <p>The interceptor is standing by for the first sealed anomaly thread.</p>
+              <div className="launch-brief-grid">
+                <span>{SIGNAL_CATALOG.length} sealed threads</span>
+                <span>local memory ready</span>
+                <span>{selectedDistrict.name} online</span>
+              </div>
+              <button type="button" onClick={openInterceptor}>
+                <Radio size={14} />
+                Start signal sweep
+              </button>
+            </div>
+          )}
         </section>
 
         <aside className="inspector-panel" aria-label="Context inspector">
@@ -680,9 +702,14 @@ function App() {
             <span>Active Directive</span>
             <strong>{activeDirective}</strong>
           </div>
-          <button type="button" onClick={openInterceptor} aria-label="Scan hidden frequencies">
+          <button
+            type="button"
+            className={`strip-scan-action ${hasSignalMemory ? '' : 'is-awaiting'}`}
+            onClick={openInterceptor}
+            aria-label={scanActionLabel}
+          >
             <Radio size={15} />
-            Scan hidden frequencies
+            {scanActionLabel}
           </button>
           {nextInvestigationAction && (
             <button
@@ -699,7 +726,7 @@ function App() {
           <div>
             <Radio size={15} />
             <span>Signal Memory</span>
-            <strong>{signalIntel.length ? `${signalTelemetry.pressure}% ${latestSignal?.title ?? 'locked'}` : weather.current_condition}</strong>
+            <strong>{hasSignalMemory ? `${signalTelemetry.pressure}% ${latestSignal?.title ?? 'locked'}` : weather.current_condition}</strong>
           </div>
         </section>
       </main>

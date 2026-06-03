@@ -1,73 +1,34 @@
-# React + TypeScript + Vite
+# 云深处 / The Deep Cloud
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+云端城市观察台。玩家在主舷窗中观察区域、扫描隐藏频段、锁定异常信号，并沿着全局 Next Action 推进调查闭环。
 
-Currently, two official plugins are available:
+## 在线试玩
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+GitHub Pages:
 
-## React Compiler
+https://wangjiehu.github.io/YunShenChu/
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 本地运行
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm ci
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+开发服务器启动后打开终端输出中的本地地址，通常是 `http://127.0.0.1:5173/`。
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## 构建
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run lint
+npm run build
 ```
+
+构建产物在 `dist/`。Vite 已使用相对资源路径配置，`dist/index.html` 可以在 GitHub Pages 子路径下正常加载资源。
+
+## 体验检查点
+
+- 首次进入时，城市舷窗会显示 `Start signal sweep` 入口。
+- 锁定信号后，底部 Signal Strip 会显示当前记忆和下一步调查动作。
+- Archive 支持按 All / Unlocked / Sealed 过滤，并可搜索异常 id、标题、来源、证据、影响和调查动作。
+- 本地记忆会保存已发现信号、调查动作和观察日志，刷新后可恢复。
