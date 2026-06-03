@@ -33,7 +33,9 @@ jobs:
           cache-dependency-path: SkyCity/package-lock.json
 
       - name: Install
-        run: npm ci
+        run: |
+          npm ci --include=optional
+          npm install --include=optional --no-audit --no-fund
 
       - name: Lint
         run: npm run lint
