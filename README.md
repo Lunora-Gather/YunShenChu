@@ -6,7 +6,7 @@
 
 GitHub Pages:
 
-https://wangjiehu.github.io/YunShenChu/
+https://lunora-gather.github.io/YunShenChu/
 
 > 如果页面还没出现，检查 GitHub 仓库的 Pages 设置是否启用 GitHub Actions 部署。
 

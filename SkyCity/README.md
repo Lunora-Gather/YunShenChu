@@ -6,7 +6,7 @@
 
 GitHub Pages:
 
-https://wangjiehu.github.io/YunShenChu/
+https://lunora-gather.github.io/YunShenChu/
 
 ## 本地运行
 
