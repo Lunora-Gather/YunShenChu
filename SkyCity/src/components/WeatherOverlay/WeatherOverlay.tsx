@@ -12,7 +12,7 @@ const WeatherOverlay: React.FC<WeatherOverlayProps> = ({ condition }) => {
   const isStorm = condition.toLowerCase().includes('storm');
   
   return (
-    <div className="weather-overlay-container">
+    <div className="weather-overlay-container" aria-hidden="true">
       <div className="mist-layer mist-1"></div>
       <div className="mist-layer mist-2"></div>
       {isAurora && (

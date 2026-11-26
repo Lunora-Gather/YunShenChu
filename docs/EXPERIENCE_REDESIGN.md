@@ -1,5 +1,7 @@
 # 云深处体验重构审查记录
 
+这里按迭代顺序保留了设计决定、验证记录和场景美术来源。当前玩法与发布流程见[项目首页](../README.md)和[开发说明](../SkyCity/README.md)。
+
 ## 判断
 
 上一版能够运行，但体验重心偏向“控制台组件陈列”，城市本身没有成为第一视觉对象。世界观文档里最有辨识度的元素——高空、浮岛、重力核心、云下禁忌、第 14 号岛——没有充分进入首屏。
@@ -153,3 +155,85 @@
 - 浏览器验证无本地记忆的首次进入：First Sweep 简报可见，点击 `Start signal sweep` 能打开 Signal Interceptor。
 - 浏览器验证已有本地信号记忆：First Sweep 简报消失，Signal Strip 显示 Next Action 与 Signal Memory。
 - 移动端 390x844 验证首次进入无横向溢出，启动简报不遮挡顶部区域读数和底部状态条。
+
+## 控制台操作、状态与渲染
+
+- 首轮简报并入城市读数，移动端将扫描和 Next Action 固定在视口底部。终端和日记共享抽屉状态，弹窗使用浏览器原生焦点约束。
+- 指定扫频只锁定目标。调查在明确操作后推进，收容后会更新地图读数、摄像头证据、居民报道和共振压力。
+- Foundation Archive 使用固定的历史数据。返回 Live City 时恢复此前的城区和继续运转的实时状态。
+- 存档保留 v2 迁移，支持两个会话合并信号、动作和日志。存储不可用时继续使用会话记忆。
+- 城市地图按舷窗宽度缩放。交通画布移出视口时暂停绘制，静音会挂起音频引擎。
+- 应用与 Vite 配置启用 TypeScript 严格检查。锁文件更新保留现有依赖版本范围。
+- 回归脚本覆盖 5 条调查、15 个动作、6 种视口、双会话存档、旧版迁移、未来版本保护和 GitHub Pages 子路径加载。运行入口为 `npm run test:safari` 和 `npm run test:browser`。
+
+## 案卷推理与终局指令
+
+- 五个案卷分别使用定位复测、压力传播时序、调度密钥、对照记录和输入时间戳。每案需要选定一个解释并提交两条来自不同来源的证据。与记录冲突的判断会收到相应反馈，结案状态保留到下一次游玩。
+- 归墟使用一张可在摄像头和案卷中查看的原创监控底片。后续四案通过仪器记录继续调查，五案结论汇入车次 Q-17 的跨案调度单。
+- 终局有两种指令，各自更新地图轨道、实时指令和调度回执。v4 存档保存调查结论和终局选择，v2/v3 已采集的动作可直接用于对应案卷。
+
+### 监控底片生成记录
+
+使用内置 imagegen 生成，发布资源为 `SkyCity/src/assets/guixu-camera-14f.jpg`。
+
+> A wide 16:9 surveillance-camera still for the original science-fiction game The Deep Cloud. The camera is bolted under a floating industrial city, looking down into a dense, blue-green cloud ocean at pre-dawn. In the middle-right, a small unregistered floating platform is almost swallowed by fog, but three distinct industrial support struts remain readable against a lighter opening in the clouds. The upper-left edge contains part of the known city's dark underside for scale. Coarse optical grain, subtle degraded night-camera contrast, deep shadows and restrained turquoise highlights, convincing weathered metal. The image should feel like an undisclosed field record. Use no text, labels, interface graphics, logos, people, or dramatically bright lights.
+
+## 主动取证与重演
+
+- 拦截器通过强度和方向提示支持手动扫频，首轮仍可使用自动扫频。已锁定频率可以直接调回。
+- 五案分别加入监控帧配准、压力峰采样、许可核对、恒定负荷下的对照试验和时钟校准。每件仪器只在操作验证后收录现场记录。
+- 校准最后一案的时钟需要先赴 Year 01 读取参考脉冲，再回到实时日记比对。档案时代的切换参与了取证。
+- 已结案的案卷开放重演。练习轮换画面标记目标、压力采样、许可码、触发脉冲的操作或时钟偏差，调查结论和终局指令继续由原档保管。
+- 档案按时间整理现场记录，可从任意记录返回来源案卷。移动案卷提供记录和结论之间的跳转。
+
+### 三个城区监控画面生成记录
+
+三个场景均使用内置 imagegen 生成，目的是让三个城区在观测时有独立可辨的建筑与光线。
+
+#### Apex · `SkyCity/src/assets/camera-apex.jpg`
+
+> Original in-world surveillance camera image for the science-fiction game The Deep Cloud, Apex district. Wide 16:9 fixed camera from the high corner of a restrained civic atrium on a city floating above a cloud sea. A luminous tall cylindrical transit shaft through a transparent glass floor, thin pale metal bridges, cool silver structural ribs, huge outside blue dawn, small anonymous human silhouettes for scale. Clear geometric composition with a strongly recognizable vertical shaft at center, understated wear and realistic engineering. Slight low-light camera texture, sophisticated architectural cinematography, icy whites and muted cyan. No readable signs, interface graphics, words, logos, characters facing camera, or watermarks.
+
+#### Mid-Ring · `SkyCity/src/assets/camera-midring.jpg`
+
+> Original in-world surveillance camera image for the science-fiction game The Deep Cloud, Mid-Ring district. Wide 16:9 fixed elevated camera looking along a compact floating night market suspended on residential bridges above deep blue cloud void. Amber food-stall light, stacked narrow vendor balconies, small anonymous pedestrian silhouettes, wet grated walkways, cables, a distinct curving amber transit loop. Camera composition observes an ordinary lived-in neighborhood, clear foreground-to-background separation, realistic materials, gentle film grain. Muted green and warm mineral amber, restrained teal shadows, not a stock cyberpunk skyline. No readable words, logos, interface graphics, captions, or watermarks.
+
+#### Foundation · `SkyCity/src/assets/camera-foundation.jpg`
+
+> Original in-world surveillance camera image for the science-fiction game The Deep Cloud, Foundation district. Wide 16:9 stationary camera inside the underside of a floating industrial city, facing stacked weathered pressure ducts, a deep circular cloud intake and narrow maintenance catwalks. Condensation, suspended heavy anchors, one restrained jade work light carving the pipes, silhouettes of infrastructure fade downward into blue-black fog. Grounded industrial engineering, crisp geometric profile where the intake meets the catwalk, realistic low-light surveillance texture. No isolated second platform, readable words, logos, UI graphics, or watermarks.
+
+### 标题、舷窗与终局画面
+
+两张画面使用内置图像生成。城市全景用于标题。零号月台用于终局前的发车清单与后日谈。
+
+#### 城市外景 · `SkyCity/src/assets/city-panorama.jpg`
+
+> Create an original cinematic key art environment for the existing science fiction mystery game The Deep Cloud. Wide 3:2 horizontal frame with an immense cloud sea and one majestic believable floating city at the center-right. It consists of one high central ivory art deco observation spire, a broad broken elliptical inhabited ring crossed by fine lit bridges, two separated industrial platforms under the ring, piers suspended into low clouds. View the skyline and underside at once from a far aerial vantage. The city silhouette occupies the central 55 percent of the width and can survive center cropping. Left side has deep quiet pale gray clouds and lower left has soft dark gray-marine fog for website headline. Pale sunrise through layered cloud at upper right; hints of amber lights in navy and oxidized green metal. Atmospheric photographic production design, retained fine grain, beautiful real cloud shapes, readable volume and deliberate composition. Moody pale green slate, dark obsidian sea, ivory highlight. Avoid magenta, oversaturated cyan, galaxies, planets, text, logos, watermarks, HUD, humans and decorative borders.
+
+#### 零号月台 · `SkyCity/src/assets/platform-zero.jpg`
+
+> Original final scene for the science fiction mystery game The Deep Cloud, cinematic horizontal 3:2. At suspended Platform Zero, a worn covered platform beside a narrow monorail track vanishes into dark maritime cloud below a grand floating city's underside. A small old ivory dark steel passenger railcar at center-right caught in a patch of warm platform light, a single unlit door and a column of weak dawn in the fog ahead. Tactile staggered industrial steel ribs and slate green mist, subtle condensation and rust, tones of oxford green and warm amber. At once beautiful, lonely, lived-in, believable. Wide environmental film still, center subject that remains legible at narrow crop, soft dark lower left for external overlay. No people, no text, no numbers, no signs, no UI, no logo, no watermark.
+
+## 跨案复原与发行维护
+
+- 零号月台发车前必须从五案各关联一条现场记录。核验会标出需要复查的条目。当前标签页会记住清单中的选择与核验结果，已有结局可以直接重读。
+- 开启居民动态只展示由来源署名的证词。玩家在处理压力波后亲自确认归档。时钟案分别记录校准前的待确认状态与校准后的对齐结果。
+- 手动调谐跟随未锁定或指定载波，提供 0.1 MHz 细调和键盘频带边界。标题画面与后台标签暂停城市模拟，避免写入玩家尚未观察到的日志。
+- 标题画面和系统面板提供存档下载与预览合并。原始调查槽与重玩槽可以各自恢复，合并保留目标槽已有结局。
+- `npm run release:build` 生成可解压运行的发行包。启动器使用稳定的本机地址以沿用已有存档，运行资源全部随包提供。
+
+## 三环舷窗外景
+
+三张外景以标题全景为建筑参考，使用内置图像生成。实时舷窗按所选城区切换，Year 01 使用历史示意图。
+
+### 上环 · `SkyCity/src/assets/district-apex.jpg`
+
+> Use case: stylized-concept. New cinematic environment for the Apex district of The Deep Cloud. The supplied panoramic artwork is an architectural and color reference only. Create a new viewpoint from an exterior observation deck high on the recognizable ivory Art Deco spire, looking across its silver glass upper terraces over a brilliant cream-white cloud sea at cool morning. Center the silhouette of a pale crown-shaped civic pavilion linked by a fine silver bridge, with a few sparse amber windows in the distance. Pale blue and ivory light, delicate green patina and restrained slate shadows. Wide landscape 3:2, near and middle architectural scale, key silhouette within central 55% for phone cropping, calm textured negative space at bottom left for a legible overlay. Grounded lived-in architectural film still. No text, no UI, no markings, no logos, no watermarks.
+
+### 中环 · `SkyCity/src/assets/district-midring.jpg`
+
+> Use case: stylized-concept. New cinematic environment for the Mid-Ring district of The Deep Cloud. The supplied floating city artwork is an architectural and color reference only. Create a distinct new exterior viewpoint from a balcony level with the busy, inhabited middle ring of the city: dense stepped terraces of weathered deep-green metal, shop windows and warm amber lamps, rooftop trees and planters, a distinct arched enclosed light rail bridge crossing the open mist at center. A few distant anonymous people for scale, side-of-the-ring geometry and real depth. Warm copper and amber windows against teal-gray cloud, soft overcast golden hour. Wide landscape 3:2, key bridge within central 55% for phone cropping, quiet shadow at lower left for an interface overlay. Grounded architectural film still; no readable lettering, logos, watermarks, UI or frame.
+
+### 下环 · `SkyCity/src/assets/district-foundation.jpg`
+
+> Use case: stylized-concept. New cinematic environment for the Foundation district of The Deep Cloud. The supplied floating city panorama is an architectural and color reference only. Create a completely different exterior viewpoint under its ring, looking outward from the flank of a low industrial platform at a huge cylindrical copper-green condensation tower, riveted trusses, long ducts and working catwalks suspended in heavy lower cloud. View the recognizable underside from the same altitude, with dark blue-green foreground, a few small golden service lamps, bleached glow through fog on the right. A single industrial tower and supporting girders should stand clearly in the central 55% for a phone crop; clear layered silhouettes through fog, not all dark. Wide landscape 3:2 atmospheric architectural film still, dark soft bottom-left space for an interface overlay. No distant solitary island or ghost train, no text, logos, UI, watermark or frame.

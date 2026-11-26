@@ -18,10 +18,30 @@
 
 .observer-diary-drawer.open {
   width: min(760px, calc(100vw - 40px));
-  height: 450px;
+  height: min(450px, 100dvh);
   z-index: 2200;
   background: rgba(5, 10, 20, 0.98);
   border-color: rgba(0, 210, 255, 0.6);
+}
+
+.diary-location-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 12px 8px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.diary-location-filter select {
+  min-width: 0;
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: 5px;
+  background: #0a1928;
+  color: var(--text-primary);
 }
 
 .diary-toggle {
@@ -29,7 +49,7 @@
   border: none;
   color: var(--accent-blue);
   width: 100%;
-  height: 36px;
+  min-height: 36px;
   display: flex;
   align-items: center;
   padding: 0 20px;
@@ -119,7 +139,7 @@
 
 .diary-summary {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   padding: 12px 20px;
   border-bottom: 1px solid rgba(0, 210, 255, 0.12);
@@ -203,6 +223,7 @@
 
 .diary-entries {
   flex: 1;
+  min-height: 48px;
   overflow-y: auto;
   padding: 20px;
   display: flex;
@@ -270,16 +291,6 @@
   font-size: 13px;
   line-height: 1.4;
   color: rgba(255, 255, 255, 0.9);
-}
-
-.entry-footer {
-  margin-top: 10px;
-  display: flex;
-  justify-content: space-between;
-  font-size: 8px;
-  color: rgba(255, 255, 255, 0.3);
-  padding-top: 6px;
-  border-top: 1px dashed rgba(255, 255, 255, 0.05);
 }
 
 /* Entry Types Colors */
@@ -353,7 +364,7 @@
 
   .observer-diary-drawer.open {
     width: calc(100vw - 20px);
-    height: min(450px, 72vh);
+    height: min(470px, 78dvh);
   }
 
   .diary-toggle {
@@ -362,19 +373,29 @@
   }
 
   .diary-header {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .diary-meta {
+    display: none;
   }
 
   .diary-summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    padding: 10px 12px;
+    padding: 8px 12px;
   }
 
   .diary-filter-bar {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    padding: 10px 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    padding: 8px 12px;
+  }
+}
+
+@media (max-height: 480px) {
+  .diary-meta,
+  .diary-summary {
+    display: none;
   }
 }
 

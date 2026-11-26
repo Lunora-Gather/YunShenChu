@@ -17,6 +17,7 @@
   mix-blend-mode: screen;
   transition: transform 0.2s ease-out;
   opacity: 0.6;
+  transform: translate(calc(var(--starfield-x, 0) * 10px), calc(var(--starfield-y, 0) * 10px));
 }
 
 .stars-layer {
@@ -26,6 +27,14 @@
   width: 120%;
   height: 120%;
   transition: transform 0.15s ease-out;
+  transform: translate(calc(var(--starfield-x, 0) * 30px), calc(var(--starfield-y, 0) * 30px));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .starfield-container .nebula,
+  .starfield-container .stars-layer {
+    transform: none;
+  }
 }
 
 .star {

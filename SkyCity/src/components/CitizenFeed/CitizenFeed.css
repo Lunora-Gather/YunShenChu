@@ -1,7 +1,8 @@
 .citizen-feed-container {
   display: flex;
   flex-direction: column;
-  height: 250px;
+  min-height: 228px;
+  max-height: 340px;
   overflow: hidden;
   background: var(--glass-bg);
   backdrop-filter: var(--glass-blur);
@@ -42,7 +43,65 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  scroll-behavior: smooth;
+}
+
+.citizen-feed-container:has(.feed-witness) {
+  max-height: none;
+}
+
+.citizen-feed-container:has(.feed-witness) .feed-list {
+  max-height: 230px;
+}
+
+.feed-witness {
+  display: grid;
+  gap: 8px;
+  margin: 10px;
+  padding: 11px;
+  border: 1px solid #597062;
+  border-left-color: var(--accent-gold);
+  border-radius: 5px;
+  background: #1a2d23;
+}
+
+.feed-witness > div,
+.feed-witness-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.feed-witness h2 {
+  font-size: 14px;
+}
+
+.feed-witness time,
+.feed-witness-status {
+  color: var(--accent-cyan);
+  font-size: 11px;
+}
+
+.feed-witness blockquote {
+  color: #e0e9df;
+  font-size: 13px;
+  line-height: 1.43;
+}
+
+.feed-witness-status {
+  justify-content: start;
+}
+
+.feed-witness-capture {
+  justify-self: start;
+  min-height: 40px;
+  padding: 4px 9px;
+  border-radius: 4px;
+  background: var(--accent-gold);
+  color: #182118;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
 }
 
 .feed-item {
@@ -87,41 +146,36 @@
   font-size: 12px;
   line-height: 1.4;
   color: rgba(255, 255, 255, 0.9);
-  margin-bottom: 8px;
 }
 
-.item-footer {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 9px;
+.feed-corroboration {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--glass-border);
   color: var(--text-secondary);
 }
 
-.item-action {
+.feed-filters {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 10px 0;
+}
+
+.feed-filters button {
+  padding: 6px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text-secondary);
   cursor: pointer;
-  font: inherit;
-  transition: color 0.2s;
+  font-size: 11px;
 }
 
-.item-likes:hover { color: var(--accent-red); }
-.item-share:hover { color: var(--accent-blue); }
-
-.item-action:focus-visible {
-  outline: 1px solid currentColor;
-  outline-offset: 2px;
-}
-
-.item-time {
-  margin-left: auto;
-  opacity: 0.6;
+.feed-filters button[aria-pressed="true"] {
+  border-color: var(--accent-cyan);
+  color: var(--text-primary);
 }
 
 @keyframes citizenFeedSlideInUp {

@@ -6,7 +6,7 @@
   height: 100%;
   pointer-events: none;
   overflow: hidden;
-  z-index: 5;
+  z-index: 1;
 }
 
 .mist-layer {
@@ -15,7 +15,11 @@
   left: 0;
   width: 200%;
   height: 100%;
-  background: url('https://www.transparenttextures.com/patterns/fog.png');
+  background:
+    radial-gradient(ellipse 40% 24% at 24% 72%, rgba(206, 228, 225, 0.4), transparent),
+    radial-gradient(ellipse 33% 18% at 72% 58%, rgba(190, 215, 226, 0.32), transparent);
+  background-size: 50% 100%;
+  background-repeat: repeat-x;
   opacity: 0.2;
 }
 

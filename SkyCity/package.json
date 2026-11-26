@@ -7,7 +7,11 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "release:build": "npm run build && python3 scripts/package_release.py",
+    "test:storage": "node --test tests/observer-storage.mjs tests/night-watch.mjs",
+    "test:safari": "npm run build && node tests/browser.mjs",
+    "test:browser": "npm run build && node tests/browser.mjs --webkit"
   },
   "dependencies": {
     "lucide-react": "^1.17.0",
@@ -24,6 +28,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
+    "playwright": "1.60.0",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.2",
     "vite": "^8.0.12"

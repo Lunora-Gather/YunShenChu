@@ -1,15 +1,17 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useEffectEvent, useRef } from 'react';
 
 interface Shuttle {
   x: number;
-  y: number;
+  verticalPosition: number;
   speed: number;
   size: number;
   opacity: number;
 }
 
-const TrafficVisualization: React.FC = () => {
+const TrafficVisualization: React.FC<{ paused: boolean }> = ({ paused }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const refreshAnimation = useRef<() => void>(null);
+  const isPaused = useEffectEvent(() => paused);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -18,65 +20,101 @@ const TrafficVisualization: React.FC = () => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    let animationFrameId: number;
-    const shuttles: Shuttle[] = [];
+    const sprite = document.createElement('canvas');
+    sprite.width = 16;
+    sprite.height = 1;
+    const spriteContext = sprite.getContext('2d');
+    if (!spriteContext) return;
+    const gradient = spriteContext.createLinearGradient(0, 0, 10, 0);
+    gradient.addColorStop(0, 'transparent');
+    gradient.addColorStop(1, '#00d2ff');
+    spriteContext.fillStyle = gradient;
+    spriteContext.fillRect(0, 0, sprite.width, 1);
 
-    const resize = () => {
-      canvas.width = canvas.offsetWidth;
-      canvas.height = canvas.offsetHeight;
-    };
-
-    window.addEventListener('resize', resize);
-    resize();
-
-    // Initialize shuttles
-    for (let i = 0; i < 40; i++) {
-      shuttles.push({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
-        speed: 0.5 + Math.random() * 2,
+    const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const shuttles: Shuttle[] = Array.from({ length: 40 }, () => ({
+        x: Math.random() * canvas.clientWidth,
+        verticalPosition: Math.random(),
+        speed: 30 + Math.random() * 120,
         size: 1 + Math.random() * 2,
         opacity: 0.1 + Math.random() * 0.5
-      });
-    }
+    }));
+    let width = 0;
+    let height = 0;
+    let frame: number | null = null;
+    let lastFrame = 0;
+    let visible = true;
 
-    const draw = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
-      shuttles.forEach(shuttle => {
-        ctx.fillStyle = `rgba(0, 210, 255, ${shuttle.opacity})`;
-        ctx.beginPath();
-        // Draw a small elongated "shuttle" shape
-        ctx.rect(shuttle.x, shuttle.y, shuttle.size * 3, shuttle.size);
-        ctx.fill();
-
-        // Add a small trail
-        const gradient = ctx.createLinearGradient(shuttle.x, shuttle.y, shuttle.x - 10, shuttle.y);
-        gradient.addColorStop(0, `rgba(0, 210, 255, ${shuttle.opacity * 0.5})`);
-        gradient.addColorStop(1, 'transparent');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(shuttle.x - 10, shuttle.y, 10, shuttle.size);
-
-        shuttle.x += shuttle.speed;
-        if (shuttle.x > canvas.width + 20) {
+    const draw = (seconds: number) => {
+      ctx.clearRect(0, 0, width, height);
+      for (const shuttle of shuttles) {
+        shuttle.x += shuttle.speed * seconds;
+        if (shuttle.x > width + 20) {
           shuttle.x = -20;
-          shuttle.y = Math.random() * canvas.height;
+          shuttle.verticalPosition = Math.random();
         }
-      });
-
-      animationFrameId = requestAnimationFrame(draw);
+        ctx.globalAlpha = shuttle.opacity;
+        ctx.drawImage(sprite, shuttle.x - 10, shuttle.verticalPosition * height, 10 + shuttle.size * 3, shuttle.size);
+      }
     };
 
-    draw();
+    const tick = (now: number) => {
+      const elapsed = now - lastFrame;
+      if (elapsed >= 30) {
+        draw(Math.min(elapsed / 1000, 0.08));
+        lastFrame = now;
+      }
+      frame = requestAnimationFrame(tick);
+    };
+
+    const updateAnimation = () => {
+      if (visible && !document.hidden && !motion.matches && !isPaused()) {
+        if (frame !== null) return;
+        lastFrame = performance.now();
+        frame = requestAnimationFrame(tick);
+      } else if (frame !== null) {
+        cancelAnimationFrame(frame);
+        frame = null;
+      }
+    };
+
+    const resize = () => {
+      width = canvas.clientWidth;
+      height = canvas.clientHeight;
+      const scale = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.round(width * scale);
+      canvas.height = Math.round(height * scale);
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      draw(0);
+    };
+
+    const resizeObserver = new ResizeObserver(resize);
+    const intersectionObserver = new IntersectionObserver(([entry]) => {
+      visible = entry.isIntersecting;
+      updateAnimation();
+    });
+    resizeObserver.observe(canvas);
+    intersectionObserver.observe(canvas);
+    document.addEventListener('visibilitychange', updateAnimation);
+    motion.addEventListener('change', updateAnimation);
+    refreshAnimation.current = updateAnimation;
+    resize();
+    updateAnimation();
 
     return () => {
-      window.removeEventListener('resize', resize);
-      cancelAnimationFrame(animationFrameId);
+      refreshAnimation.current = null;
+      resizeObserver.disconnect();
+      intersectionObserver.disconnect();
+      document.removeEventListener('visibilitychange', updateAnimation);
+      motion.removeEventListener('change', updateAnimation);
+      if (frame !== null) cancelAnimationFrame(frame);
     };
   }, []);
 
+  useEffect(() => refreshAnimation.current?.(), [paused]);
+
   return (
-    <canvas 
+    <canvas aria-hidden="true"
       ref={canvasRef} 
       style={{
         position: 'absolute',

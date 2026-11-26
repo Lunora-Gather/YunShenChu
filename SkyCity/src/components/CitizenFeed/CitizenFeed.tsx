@@ -1,17 +1,14 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import './CitizenFeed.css';
-import { MessageSquare, Heart, Share2 } from 'lucide-react';
+import { Check, MessageSquare } from 'lucide-react';
 import { useCity } from '../../context/CityContext';
-import type { SignalIntel } from '../../data/signals';
+import { getFieldRecord } from '../../data/caseFiles';
 
 interface FeedItem {
   id: string;
   user: string;
   handle: string;
   content: string;
-  timestamp: string;
-  likes: number;
-  tone?: 'normal' | 'signal';
 }
 
 const CITIZEN_NAMES = ['SkyWalker', 'CloudDrifter', 'MistRunner', 'AeroPilot', 'VaporArtist', 'NimbusFan'];
@@ -34,78 +31,83 @@ const MESSAGES = [
   'If you see the Abyss Whale, do not blink. It is looking at YOU.',
 ];
 
-let feedCounter = 0;
-
-const generateItem = (signal?: SignalIntel): FeedItem => {
-  feedCounter += 1;
+const generateItem = (id: number): FeedItem => {
   const user = CITIZEN_NAMES[Math.floor(Math.random() * CITIZEN_NAMES.length)];
   return {
-    id: `feed-${feedCounter}`,
+    id: `feed-${id}`,
     user,
     handle: `@${user.toLowerCase()}`,
-    content: signal?.citizenReport ?? MESSAGES[Math.floor(MESSAGES.length * Math.random())],
-    timestamp: 'Just now',
-    likes: signal ? 70 + Math.floor(Math.random() * 80) : Math.floor(Math.random() * 50),
-    tone: signal ? 'signal' : 'normal',
+    content: MESSAGES[Math.floor(MESSAGES.length * Math.random())],
   };
 };
 
-const createInitialFeed = () => Array.from({ length: 5 }).map(() => generateItem());
+const FEED_SIZE = 10;
+const createInitialFeed = () => Array.from({ length: 5 }, (_, index) => generateItem(index));
+const witnessRecord = getFieldRecord('abyss-whale', 'review-citizens');
 
 const CitizenFeed: React.FC = () => {
-  const { latestSignal, signalIntel, signalTelemetry } = useCity();
+  const { completeInvestigationAction, investigationState, latestSignal, signalTelemetry } = useCity();
   const [feed, setFeed] = useState<FeedItem[]>(createInitialFeed);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [showAmbient, setShowAmbient] = useState(false);
+  const thread = investigationState.latestThread;
+  const witness = latestSignal?.id === 'abyss-whale' ? witnessRecord : undefined;
+  const witnessFiled = witness && thread?.completedActionIds.includes(witness.actionId);
 
   useEffect(() => {
+    let nextId = 5;
     const interval = setInterval(() => {
-      const shouldEchoSignal = signalIntel.length > 0 && Math.random() < 0.38;
-      const signal = shouldEchoSignal ? signalIntel[Math.floor(Math.random() * signalIntel.length)] : undefined;
-      setFeed((prev) => [...prev.slice(-10), generateItem(signal)]);
+      const item = generateItem(nextId++);
+      setFeed((prev) => [item, ...prev.slice(0, FEED_SIZE - 1)]);
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [signalIntel]);
-
-  useEffect(() => {
-    if (!latestSignal) return;
-    const timer = window.setTimeout(() => {
-      setFeed((prev) => [...prev.slice(-10), generateItem(latestSignal)]);
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, [latestSignal]);
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [feed]);
+  }, []);
 
   return (
     <div className="citizen-feed-container glass-panel">
       <div className="feed-header">
         <MessageSquare size={14} />
-        <span>CITIZEN FEED</span>
-        <strong>{signalTelemetry.pressure}% signal pressure</strong>
+        <span>居民来讯</span>
+        <strong>信号压力 {signalTelemetry.pressure}%</strong>
       </div>
-      <div className="feed-list" ref={scrollRef}>
-        {feed.map((item) => (
-          <div key={item.id} className={`feed-item tone-${item.tone ?? 'normal'}`}>
+      {witness && (
+        <section className="feed-witness" aria-labelledby="vent-witness-title">
+          <div><h2 id="vent-witness-title">{witness.source}</h2><time>{witness.time}</time></div>
+          {witness.readings.map(({ id, value }) => <blockquote key={id}>{value}</blockquote>)}
+          {witnessFiled ? (
+            <p className="feed-witness-status" role="status"><Check size={15} aria-hidden="true" /> 证词已归档</p>
+          ) : thread?.nextAction?.id === witness.actionId ? (
+            <button className="feed-witness-capture" type="button" onClick={() => completeInvestigationAction(thread.signal.id, witness.actionId)}>
+              收录值班证词
+            </button>
+          ) : <p className="feed-witness-status">先在压力曲线上标出波峰，再收录这份证词。</p>}
+        </section>
+      )}
+      {latestSignal && thread && (
+        <div className="feed-filters" aria-label="来讯范围">
+          <button type="button" aria-pressed={!showAmbient} onClick={() => setShowAmbient(false)}>本案来讯</button>
+          <button type="button" aria-pressed={showAmbient} onClick={() => setShowAmbient(true)}>全城来讯</button>
+        </div>
+      )}
+      <div className="feed-list">
+        {latestSignal && thread && !showAmbient ? (
+          <div className="feed-item tone-signal">
+            <div className="item-user">
+              <span className="user-name">{latestSignal.title}</span>
+              <span className="user-handle">{thread.stage}</span>
+            </div>
+            <p className="item-content">{latestSignal.citizenReport}</p>
+            {thread.stage !== 'detected' && (
+              <p className="item-content feed-corroboration">{thread.stage === 'contained' ? latestSignal.investigation.contained : latestSignal.evidence}</p>
+            )}
+          </div>
+        ) : feed.map((item) => (
+          <div key={item.id} className="feed-item">
             <div className="item-user">
               <span className="user-name">{item.user}</span>
               <span className="user-handle">{item.handle}</span>
             </div>
             <p className="item-content">{item.content}</p>
-            <div className="item-footer">
-              <button className="item-action item-likes" type="button" aria-label={`Like post from ${item.user}`}>
-                <Heart size={10} /> {item.likes}
-              </button>
-              <button className="item-action item-share" type="button" aria-label={`Share post from ${item.user}`}>
-                <Share2 size={10} />
-              </button>
-              <span className="item-time">{item.timestamp}</span>
-            </div>
           </div>
         ))}
       </div>

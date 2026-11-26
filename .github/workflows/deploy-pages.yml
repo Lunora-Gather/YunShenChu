@@ -33,15 +33,18 @@ jobs:
           cache-dependency-path: SkyCity/package-lock.json
 
       - name: Install
-        run: |
-          npm ci --include=optional
-          npm install --include=optional --no-audit --no-fund
+        run: npm ci --include=optional
 
       - name: Lint
         run: npm run lint
 
-      - name: Build
-        run: npm run build
+      - name: Test saves and night shifts
+        run: npm run test:storage
+
+      - name: Build game and offline download
+        run: |
+          npm run release:build
+          install -Dm644 release/The-Deep-Cloud.zip dist/downloads/The-Deep-Cloud.zip
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

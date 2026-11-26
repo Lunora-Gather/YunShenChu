@@ -1,15 +1,32 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import './DeepTerminal.css';
 import { Terminal as TerminalIcon, ChevronDown, ChevronUp, Shield, Globe, Zap } from 'lucide-react';
 import { useCity } from '../../context/CityContext';
 import { SIGNAL_CATALOG } from '../../data/signals';
+import { caseNames } from '../../data/fieldSites';
+import { getFieldRecord } from '../../data/caseFiles';
+import { getInstrument } from '../../data/instruments';
 
 interface LogEntry {
   type: 'command' | 'response' | 'error';
   text: string;
 }
 
-const DeepTerminal: React.FC = () => {
+const COMMANDS = ['help', 'world_status', 'query districts', 'go', 'district', 'signals', 'memory', 'investigation',
+  'next_action', 'complete', 'signal_pressure', 'next_lead', 'latest_signal', 'trace', 'focus', 'scan_enemies', 'clear'];
+
+function formatCapturedRecord(signalId: string, actionId: string) {
+  const record = getFieldRecord(signalId, actionId);
+  if (!record) return '';
+  return `\n\n${record.source.toUpperCase()} · ${record.time}\n${record.readings.map(({ label, value }) => `${label}: ${value}`).join('\n')}`;
+}
+
+interface DeepTerminalProps {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+const DeepTerminal: React.FC<DeepTerminalProps> = ({ isOpen, onOpenChange }) => {
   const {
     activeDirective,
     addDiaryEntry,
@@ -30,7 +47,6 @@ const DeepTerminal: React.FC = () => {
     weather,
     world,
   } = useCity();
-  const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [history, setHistory] = useState<LogEntry[]>([
     { type: 'response', text: 'DEEP TERMINAL V2.0.4 - SECURE ACCESS GRANTED' },
@@ -39,10 +55,9 @@ const DeepTerminal: React.FC = () => {
   ]);
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [commandHistoryIndex, setCommandHistoryIndex] = useState<number | null>(null);
-  const [isTyping, setIsTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const typingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
   const lastAnnouncedSignalRef = useRef<string | null>(null);
   const lastTerminalCommandRequestRef = useRef<number | null>(null);
 
@@ -57,6 +72,7 @@ const DeepTerminal: React.FC = () => {
       return (
         signal.id.toLowerCase() === normalized ||
         signal.title.toLowerCase().includes(normalized) ||
+        caseNames[signal.id].includes(normalized) ||
         signal.origin.toLowerCase().includes(normalized) ||
         frequency === normalized
       );
@@ -106,89 +122,26 @@ const DeepTerminal: React.FC = () => {
     ].slice(-80));
   }, [isOpen, latestSignal]);
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && isOpen) {
-        if (typingTimerRef.current) {
-          clearInterval(typingTimerRef.current);
-          typingTimerRef.current = null;
-        }
-        setIsTyping(false);
-        setIsOpen(false);
-        playUISound('click');
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, playUISound]);
-
-  useEffect(() => {
-    return () => {
-      if (typingTimerRef.current) {
-        clearInterval(typingTimerRef.current);
-      }
-    };
-  }, []);
-
   const addLine = useCallback((text: string, type: LogEntry['type'] = 'response') => {
     setHistory((prev) => [...prev, { type, text }].slice(-80));
   }, []);
 
-  const addResponse = useCallback((text: string, type: LogEntry['type'] = 'response') => {
-    if (typingTimerRef.current) {
-      clearInterval(typingTimerRef.current);
-      typingTimerRef.current = null;
-    }
+  const readTerminalRecord = useCallback((command: string) => {
+    if (!latestSignal || !discoveredSignalSet.has(latestSignal.id)) return '';
 
-    const characters = [...text];
-    if (!characters.length) {
-      addLine('', type);
-      return;
-    }
-
-    setIsTyping(true);
-    setHistory((prev) => [...prev, { type, text: '' }].slice(-80));
-
-    let index = 0;
-    typingTimerRef.current = setInterval(() => {
-      index += 1;
-      const currentText = characters.slice(0, index).join('');
-      setHistory((prev) => {
-        const newHistory = [...prev];
-        newHistory[newHistory.length - 1].text = currentText;
-        return newHistory;
-      });
-
-      if (index >= characters.length) {
-        if (typingTimerRef.current) {
-          clearInterval(typingTimerRef.current);
-          typingTimerRef.current = null;
-        }
-        setIsTyping(false);
-      }
-    }, 12);
-  }, [addLine]);
-
-  const completeMatchingTerminalCommand = useCallback((command: string) => {
-    if (!latestSignal || !discoveredSignalSet.has(latestSignal.id)) return false;
-
-    const normalizedCommand = command.trim().toLowerCase();
     const thread = investigationState.threads[latestSignal.id];
     const action = latestSignal.investigation.actions.find((item) => (
-      item.type === 'terminal' &&
-      item.command?.toLowerCase() === normalizedCommand &&
-      !thread?.completedActionIds.includes(item.id)
+      item.type === 'terminal' && item.command?.toLowerCase() === command
     ));
 
-    if (!action) return false;
+    if (!action) return '';
 
-    completeInvestigationAction(latestSignal.id, action.id);
-    return true;
+    if (!thread?.completedActionIds.includes(action.id)) completeInvestigationAction(latestSignal.id, action.id);
+    return formatCapturedRecord(latestSignal.id, action.id);
   }, [completeInvestigationAction, discoveredSignalSet, investigationState.threads, latestSignal]);
 
-  const runCommand = useCallback((fullCommand: string, options?: { force?: boolean }) => {
-    if (!fullCommand.trim() || (!options?.force && isTyping)) return;
+  const runCommand = useCallback((fullCommand: string) => {
+    if (!fullCommand.trim()) return;
 
     const normalizedCommand = fullCommand.trim();
     const cmd = normalizedCommand.toLowerCase();
@@ -206,17 +159,17 @@ const DeepTerminal: React.FC = () => {
     }
 
     if (cmd === 'help') {
-      addResponse('Available commands: WORLD_STATUS, QUERY DISTRICTS, GO <district>, DISTRICT <district>, SIGNALS, MEMORY, INVESTIGATION, NEXT_ACTION, COMPLETE <action>, SIGNAL_PRESSURE, NEXT_LEAD, LATEST_SIGNAL, TRACE <signal>, FOCUS <signal>, SCAN_ENEMIES, CLEAR.');
+      addLine('Available commands: WORLD_STATUS, QUERY DISTRICTS, GO <district>, DISTRICT <district>, SIGNALS, MEMORY, INVESTIGATION, NEXT_ACTION, COMPLETE <action>, SIGNAL_PRESSURE, NEXT_LEAD, LATEST_SIGNAL, TRACE <signal>, FOCUS <signal>, SCAN_ENEMIES, CLEAR.');
       return;
     }
 
     if (cmd === 'world_status') {
-      addResponse(`WORLD STATUS: ${world.global_stats.status.toUpperCase()} / mode=${isPastMode ? 'FOUNDATION_ARCHIVE' : 'LIVE_CITY'} / energy=${world.global_stats.energy_index.toFixed(1)}% / population=${world.global_stats.total_population.toLocaleString('en-US')} / weather=${weather.current_condition} / directive=${activeDirective} / signal_pressure=${signalTelemetry.pressure}% ${signalTelemetry.level}.`);
+      addLine(`WORLD STATUS: ${world.global_stats.status.toUpperCase()} / mode=${isPastMode ? 'FOUNDATION_ARCHIVE' : 'LIVE_CITY'} / energy=${world.global_stats.energy_index.toFixed(1)}% / population=${world.global_stats.total_population.toLocaleString('en-US')} / weather=${weather.current_condition} / directive=${activeDirective} / signal_pressure=${signalTelemetry.pressure}% ${signalTelemetry.level}.`);
       return;
     }
 
     if (cmd === 'query districts') {
-      addResponse(currentDistricts.map((district) => (
+      addLine(currentDistricts.map((district) => (
         `[${district.id.toUpperCase()}] ${district.name} / ${district.altitude_range[0]}-${district.altitude_range[1]}m / ${district.security_level ?? 'Standard'}`
       )).join('\n'));
       return;
@@ -225,13 +178,12 @@ const DeepTerminal: React.FC = () => {
     if (verb === 'go' || verb === 'district') {
       const district = findDistrict(target);
       if (!district) {
-        addResponse(`DISTRICT ROUTE FAILED: "${target || normalizedCommand}" is not a known sector. Run QUERY DISTRICTS for valid ids.`, 'error');
+        addLine(`DISTRICT ROUTE FAILED: "${target || normalizedCommand}" is not a known sector. Run QUERY DISTRICTS for valid ids.`, 'error');
         return;
       }
 
       setDistrict(district.id);
-      addDiaryEntry(`Terminal navigation set observer focus to ${district.name}.`, 'visit', district.name);
-      addResponse(`DISTRICT FOCUS SET: ${district.name} / ${district.id.toUpperCase()} / ${district.altitude_range[0]}-${district.altitude_range[1]}m.`);
+      addLine(`DISTRICT FOCUS SET: ${district.name} / ${district.id.toUpperCase()} / ${district.altitude_range[0]}-${district.altitude_range[1]}m.`);
       return;
     }
 
@@ -240,13 +192,13 @@ const DeepTerminal: React.FC = () => {
         const unlocked = discoveredSignalSet.has(signal.id);
         return `${unlocked ? 'UNLOCKED' : 'SEALED'} / ${signal.id} / ${unlocked ? summarizeUnlockedSignal(signal.id) : 'sweep interceptor bands for evidence'}`;
       });
-      addResponse(`SIGNAL MEMORY ${signalIntel.length}/${SIGNAL_CATALOG.length}\n${signalLines.join('\n')}`);
+      addLine(`SIGNAL MEMORY ${signalIntel.length}/${SIGNAL_CATALOG.length}\n${signalLines.join('\n')}`);
       return;
     }
 
     if (cmd === 'memory' || cmd === 'observer_memory') {
-      completeMatchingTerminalCommand(cmd);
-      addResponse(`OBSERVER MEMORY: ${observerMemory.canPersist ? 'PERSISTENT' : 'VOLATILE'} / restored=${observerMemory.restored ? 'YES' : 'NO'} / signals=${observerMemory.discoveredCount}/${SIGNAL_CATALOG.length} / diary=${observerMemory.diaryCount}/${observerMemory.diaryLimit} / persisted_cap=${observerMemory.persistedDiaryLimit} / latest=${latestSignal?.title ?? 'NONE'}.`);
+      const record = readTerminalRecord('memory');
+      addLine(`OBSERVER MEMORY: ${observerMemory.canPersist ? 'PERSISTENT' : 'VOLATILE'} / restored=${observerMemory.restored ? 'YES' : 'NO'} / signals=${observerMemory.discoveredCount}/${SIGNAL_CATALOG.length} / diary=${observerMemory.diaryCount}/${observerMemory.diaryLimit} / persisted_cap=${observerMemory.persistedDiaryLimit} / latest=${latestSignal?.title ?? 'NONE'}.${record}`);
       return;
     }
 
@@ -258,18 +210,18 @@ const DeepTerminal: React.FC = () => {
           return `${thread.signal.id}: ${thread.stage.toUpperCase()} / ${thread.completedActionIds.length}/${thread.totalActions} actions / next=${thread.nextAction?.id ?? 'none'}`;
         }).filter(Boolean)
         : ['No unlocked investigation threads.'];
-      addResponse(`INVESTIGATION STATE\n${lines.join('\n')}`);
+      addLine(`INVESTIGATION STATE\n${lines.join('\n')}`);
       return;
     }
 
     if (cmd === 'next_action' || cmd === 'next action' || cmd === 'action') {
       if (!investigationState.nextAction) {
-        addResponse('NEXT ACTION: none. Lock a signal or complete the remaining investigation actions.');
+        addLine('NEXT ACTION: none. Lock a signal or complete the remaining investigation actions.');
         return;
       }
 
       const { signal, action } = investigationState.nextAction;
-      addResponse(`NEXT ACTION: ${signal.title} / ${action.id}\n${action.label}: ${action.description}${action.command ? `\nCommand: ${action.command}` : ''}`);
+      addLine(`NEXT ACTION: ${signal.title} / ${action.id}\n${action.label}: ${action.description}${action.command ? `\nCommand: ${action.command}` : ''}`);
       return;
     }
 
@@ -281,101 +233,107 @@ const DeepTerminal: React.FC = () => {
       const actionId = explicitSignal ? secondArg : firstArg;
 
       if (!signal || !actionId) {
-        addResponse('COMPLETE FAILED: use COMPLETE <action> for the focused signal or COMPLETE <signal> <action>.', 'error');
+        addLine('COMPLETE FAILED: use COMPLETE <action> for the focused signal or COMPLETE <signal> <action>.', 'error');
         return;
       }
 
       const action = signal.investigation.actions.find((item) => item.id === actionId);
       if (!action) {
-        addResponse(`COMPLETE FAILED: "${actionId}" is not a valid action for ${signal.title}.`, 'error');
+        addLine(`COMPLETE FAILED: "${actionId}" is not a valid action for ${signal.title}.`, 'error');
         return;
       }
 
       if (!discoveredSignalSet.has(signal.id)) {
-        addResponse(`COMPLETE DENIED: ${signal.title} is still sealed.`, 'error');
+        addLine(`COMPLETE DENIED: ${signal.title} is still sealed.`, 'error');
         return;
       }
 
-      completeInvestigationAction(signal.id, action.id);
-      addResponse(`ACTION COMPLETE: ${signal.title} / ${action.label}`);
+      const recorded = investigationState.threads[signal.id]?.completedActionIds.includes(action.id);
+      if (recorded) addLine(`ALREADY RECORDED: ${signal.title} / ${action.label}.`);
+      else if (action.type === 'report') addLine('待结案 · 请打开案卷，引用两份不同来源的证据。', 'error');
+      else addLine(`RECORD PENDING: ${action.description}`, 'error');
       return;
     }
 
     if (cmd === 'signal_pressure' || cmd === 'pressure') {
       const impacts = signalTelemetry.activeImpacts.length
-        ? signalTelemetry.activeImpacts.map((impact) => `- ${impact}`).join('\n')
+        ? signalTelemetry.activeImpacts.map((signal) => `- ${signal.impact}`).join('\n')
         : '- No active anomaly impact.';
-      addResponse(`SIGNAL PRESSURE: ${signalTelemetry.pressure}% / ${signalTelemetry.level.toUpperCase()}\nSEALED THREADS: ${signalTelemetry.unresolvedCount}\nACTIVE IMPACTS:\n${impacts}`);
+      addLine(`SIGNAL PRESSURE: ${signalTelemetry.pressure}% / ${signalTelemetry.level.toUpperCase()}\nSEALED THREADS: ${signalTelemetry.unresolvedCount}\nACTIVE IMPACTS:\n${impacts}`);
       return;
     }
 
     if (cmd === 'next_lead' || cmd === 'lead') {
-      addResponse(`NEXT LEAD: ${signalTelemetry.nextLead}`);
+      addLine(`NEXT LEAD: ${signalTelemetry.nextLead}`);
       return;
     }
 
     if (cmd === 'latest_signal' || cmd === 'last_signal') {
       if (!latestSignal) {
-        addResponse('NO FOCUSED SIGNAL. Open the interceptor and lock a hidden frequency first.', 'error');
+        addLine('NO FOCUSED SIGNAL. Open the interceptor and lock a hidden frequency first.', 'error');
         return;
       }
-      addResponse(`${latestSignal.freq.toFixed(1)}MHz ${latestSignal.title}\n${latestSignal.message}\nEvidence: ${latestSignal.evidence}`);
+      addLine(`${latestSignal.freq.toFixed(1)}MHz ${latestSignal.title}\n${latestSignal.message}\nEvidence: ${latestSignal.evidence}`);
       return;
     }
 
     if (verb === 'focus') {
       const signal = findSignal(target);
       if (!signal) {
-        addResponse(`FOCUS FAILED: "${target || normalizedCommand}" is not a known anomaly key.`, 'error');
+        addLine(`FOCUS FAILED: "${target || normalizedCommand}" is not a known anomaly key.`, 'error');
         return;
       }
 
       if (!discoveredSignalSet.has(signal.id)) {
-        addResponse(`FOCUS DENIED: ${signal.title} is still sealed. Lock the frequency before focusing it.`, 'error');
+        addLine(`FOCUS DENIED: ${signal.title} is still sealed. Lock the frequency before focusing it.`, 'error');
         return;
       }
 
       focusSignal(signal.id);
       addDiaryEntry(`Terminal focus set to ${signal.title}.`, 'secret', selectedDistrict.name);
-      addResponse(`FOCUS SET: ${signal.title} / ${signal.freq.toFixed(1)}MHz / ${signal.mapFocus.toUpperCase()}`);
+      addLine(`FOCUS SET: ${signal.title} / ${signal.freq.toFixed(1)}MHz / ${signal.mapFocus.toUpperCase()}`);
       return;
     }
 
     if (verb === 'trace' || verb === 'signal' || SIGNAL_CATALOG.some((signal) => signal.id === cmd)) {
       const signal = findSignal(target || cmd);
       if (!signal) {
-        addResponse(`TRACE FAILED: "${target || normalizedCommand}" is not a known anomaly key.`, 'error');
+        addLine(`TRACE FAILED: "${target || normalizedCommand}" is not a known anomaly key.`, 'error');
         return;
       }
 
       if (!discoveredSignalSet.has(signal.id)) {
-        addResponse(`TRACE DENIED: ${signal.title} is still sealed. The interceptor must collect signal evidence first.`, 'error');
+        addLine(`TRACE DENIED: ${signal.title} is still sealed. The interceptor must collect signal evidence first.`, 'error');
         return;
       }
 
       focusSignal(signal.id);
       addDiaryEntry(`Terminal trace opened for ${signal.title}.`, 'secret', selectedDistrict.name);
       const terminalAction = signal.investigation.actions.find((action) => action.type === 'terminal' && action.command?.toLowerCase() === `trace ${signal.id}`);
-      if (terminalAction) {
+      const instrument = terminalAction ? getInstrument(signal.id, terminalAction.id) : undefined;
+      const alreadyCaptured = terminalAction && investigationState.threads[signal.id]?.completedActionIds.includes(terminalAction.id);
+      if (terminalAction && !instrument) {
         completeInvestigationAction(signal.id, terminalAction.id);
       }
-      addResponse(`${signal.title} / ${signal.freq.toFixed(1)}MHz\n${signal.message}\nMap focus: ${signal.mapFocus.toUpperCase()} / Origin: ${signal.origin}`);
+      const record = instrument && !alreadyCaptured
+        ? `\n${instrument.title.toUpperCase()}: 请回到调查台采集原始曲线。`
+        : terminalAction ? formatCapturedRecord(signal.id, terminalAction.id) : '';
+      addLine(`${signal.title} / ${signal.freq.toFixed(1)}MHz\n${signal.message}\n地图标记 ${signal.mapFocus.toUpperCase()} · 来源 ${signal.origin}${record}`);
       return;
     }
 
     if (cmd === 'scan_enemies') {
-      addResponse(`SCANNING ALL SECTORS... [||||||||||] 100%.\nNo declared enemies in civic space. ${latestSignal ? `Anomaly pressure remains attached to ${latestSignal.title}.` : 'Unexplained pressure persists below foundation vents.'}`);
+      addLine(`SCANNING ALL SECTORS... [||||||||||] 100%.\nNo declared enemies in civic space. ${latestSignal ? `Anomaly pressure remains attached to ${latestSignal.title}.` : 'Unexplained pressure persists below foundation vents.'}`);
       return;
     }
 
-    addResponse(`ERROR: Command "${normalizedCommand}" not recognized. Type "help" for valid commands.`, 'error');
+    addLine(`ERROR: Command "${normalizedCommand}" not recognized. Type "help" for valid commands.`, 'error');
   }, [
     activeDirective,
     completeInvestigationAction,
-    completeMatchingTerminalCommand,
+    readTerminalRecord,
     addDiaryEntry,
     addLine,
-    addResponse,
     currentDistricts,
     discoveredSignalIds,
     discoveredSignalSet,
@@ -384,7 +342,6 @@ const DeepTerminal: React.FC = () => {
     focusSignal,
     investigationState,
     isPastMode,
-    isTyping,
     latestSignal,
     observerMemory,
     playUISound,
@@ -399,44 +356,20 @@ const DeepTerminal: React.FC = () => {
     world.global_stats.total_population,
   ]);
 
-  useEffect(() => {
+  const runRoutedCommand = useEffectEvent(() => {
     if (!terminalCommandRequest || lastTerminalCommandRequestRef.current === terminalCommandRequest.id) return;
-
     lastTerminalCommandRequestRef.current = terminalCommandRequest.id;
+    onOpenChange(true);
+    setInput('');
+    addLine(`COMMAND ROUTED: ${terminalCommandRequest.label}.`);
+    runCommand(terminalCommandRequest.command);
+  });
 
-    const routeTimer = window.setTimeout(() => {
-      if (typingTimerRef.current) {
-        clearInterval(typingTimerRef.current);
-        typingTimerRef.current = null;
-      }
-      setIsTyping(false);
-      setIsOpen(true);
-
-      if (terminalCommandRequest.autoRun) {
-        setInput('');
-        setHistory((prev) => [
-          ...prev,
-          {
-            type: 'response' as const,
-            text: `COMMAND ROUTED: ${terminalCommandRequest.label}.`,
-          },
-        ].slice(-80));
-        runCommand(terminalCommandRequest.command, { force: true });
-        return;
-      }
-
-      setInput(terminalCommandRequest.command);
-      setHistory((prev) => [
-        ...prev,
-        {
-          type: 'response' as const,
-          text: `COMMAND READY: ${terminalCommandRequest.label}. Press Enter to run "${terminalCommandRequest.command}".`,
-        },
-      ].slice(-80));
-    }, 0);
-
+  useEffect(() => {
+    if (!terminalCommandRequest) return;
+    const routeTimer = window.setTimeout(runRoutedCommand, 0);
     return () => window.clearTimeout(routeTimer);
-  }, [runCommand, terminalCommandRequest]);
+  }, [terminalCommandRequest]);
 
   const submitQuickCommand = (command: string) => {
     runCommand(command);
@@ -445,10 +378,10 @@ const DeepTerminal: React.FC = () => {
 
   const submitCurrentInput = useCallback(() => {
     const fullCommand = input.trim();
-    if (!fullCommand || isTyping) return;
+    if (!fullCommand) return;
     runCommand(fullCommand);
     setInput('');
-  }, [input, isTyping, runCommand]);
+  }, [input, runCommand]);
 
   const handleCommand = (e: React.FormEvent) => {
     e.preventDefault();
@@ -472,18 +405,45 @@ const DeepTerminal: React.FC = () => {
     setInput(commandHistory[nextIndex]);
   }, [commandHistory, commandHistoryIndex]);
 
+  const prefix = input.toLowerCase().trimStart().replace(/\s+/g, ' ');
+  const [verb] = prefix.split(' ');
+  const getCandidates = () => {
+    if (!prefix.includes(' ')) return COMMANDS;
+    if (verb === 'go' || verb === 'district') return currentDistricts.map((district) => `${verb} ${district.id}`);
+    if (verb === 'trace' || verb === 'focus') return discoveredSignalIds.map((id) => `${verb} ${id}`);
+    if (verb === 'complete' && latestSignal) return latestSignal.investigation.actions.map((action) => `complete ${action.id}`);
+    return COMMANDS;
+  };
+  const suggestion = prefix ? getCandidates().find((candidate) => candidate.startsWith(prefix) && candidate !== prefix) : undefined;
+
+  const applySuggestion = () => {
+    if (!suggestion) return;
+    const supportsArguments = ['go', 'district', 'trace', 'focus', 'complete'].includes(suggestion);
+    setInput(supportsArguments ? `${suggestion} ` : suggestion);
+    setCommandHistoryIndex(null);
+    inputRef.current?.focus();
+  };
+
   return (
-    <div className={`deep-terminal-container ${isOpen ? 'open' : 'closed'}`}>
+    <div className={`deep-terminal-container ${isOpen ? 'open' : 'closed'}`} onKeyDown={(event) => {
+      if (event.key !== 'Escape' || !isOpen || event.nativeEvent.isComposing) return;
+      event.preventDefault();
+      onOpenChange(false);
+      playUISound('click');
+      toggleRef.current?.focus({ preventScroll: true });
+    }}>
       <button
+        ref={toggleRef}
         className="terminal-header"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => onOpenChange(!isOpen)}
         type="button"
         aria-expanded={isOpen}
-        aria-label={isOpen ? 'Close deep terminal' : 'Open deep terminal'}
+        aria-controls="deep-terminal-content"
+        aria-label={isOpen ? '收起深层终端' : '打开深层终端'}
       >
         <div className="terminal-title">
           <TerminalIcon size={14} className="terminal-icon" />
-          <span>DEEP TERMINAL</span>
+          <span>{isOpen ? '深层终端' : '终端'}</span>
           {isOpen && <div className="online-indicator"></div>}
         </div>
         <div className="terminal-status-icons">
@@ -496,26 +456,26 @@ const DeepTerminal: React.FC = () => {
         </div>
       </button>
       
-      <div className="terminal-body">
-        <div className="terminal-output" ref={scrollRef}>
+      <div className="terminal-body" id="deep-terminal-content" inert={!isOpen}>
+        <div className="terminal-output" ref={scrollRef} role="log" aria-label="终端输出">
           {history.map((entry, i) => (
             <div key={i} className={`terminal-line ${entry.type}`}>
               {entry.text}
             </div>
           ))}
-          {isTyping && <span className="typing-cursor"></span>}
         </div>
-        <div className="terminal-quick-actions" aria-label="Terminal command shortcuts">
-          <button type="button" onClick={() => submitQuickCommand('world_status')} disabled={isTyping}>world</button>
-          <button type="button" onClick={() => submitQuickCommand('signals')} disabled={isTyping}>signals</button>
-          <button type="button" onClick={() => submitQuickCommand('memory')} disabled={isTyping}>memory</button>
-          <button type="button" onClick={() => submitQuickCommand('latest_signal')} disabled={isTyping}>latest</button>
-          <button type="button" onClick={() => submitQuickCommand('signal_pressure')} disabled={isTyping}>pressure</button>
+        <div className="terminal-quick-actions" aria-label="终端快捷指令">
+          <button type="button" onClick={() => submitQuickCommand('world_status')}>world</button>
+          <button type="button" onClick={() => submitQuickCommand('signals')}>signals</button>
+          <button type="button" onClick={() => submitQuickCommand('memory')}>memory</button>
+          <button type="button" onClick={() => submitQuickCommand('latest_signal')}>latest</button>
+          <button type="button" onClick={() => submitQuickCommand('signal_pressure')}>pressure</button>
         </div>
         <form onSubmit={handleCommand} className="terminal-input-form">
           <span className="terminal-prompt">&gt;</span>
           <input
             ref={inputRef}
+            aria-label="终端指令"
             type="text"
             value={input}
             onChange={(e) => {
@@ -523,9 +483,11 @@ const DeepTerminal: React.FC = () => {
               setCommandHistoryIndex(null);
             }}
             onKeyDown={(event) => {
-              if (event.key === 'Enter') {
+              if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+
+              if (event.key === 'Tab' && suggestion && !event.shiftKey) {
                 event.preventDefault();
-                submitCurrentInput();
+                applySuggestion();
               }
 
               if (event.key === 'ArrowUp') {
@@ -541,10 +503,14 @@ const DeepTerminal: React.FC = () => {
             className="terminal-input"
             autoComplete="off"
             spellCheck="false"
-            disabled={isTyping}
-            placeholder={isTyping ? "Processing..." : "Enter command..."}
+            placeholder="Enter command..."
           />
         </form>
+        {suggestion && (
+          <button type="button" className="terminal-suggestion" onClick={applySuggestion}>
+            <kbd>Tab</kbd> {suggestion}
+          </button>
+        )}
       </div>
       <div className="terminal-footer">
         <span>ZONE: {selectedDistrict.id.toUpperCase()}</span>

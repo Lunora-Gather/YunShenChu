@@ -64,9 +64,10 @@ const AudioEngine: React.FC = () => {
   const { latestSignal, selectedDistrict, lastSoundTrigger } = useCity();
   const [isMuted, setIsMuted] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
+  const [audioUnavailable, setAudioUnavailable] = useState(false);
 
   const audioContextRef = useRef<AudioContext | null>(null);
-  const ambienceGainRef = useRef<GainNode | null>(null);
   const uiGainRef = useRef<GainNode | null>(null);
   const apexGainRef = useRef<GainNode | null>(null);
   const midRingGainRef = useRef<GainNode | null>(null);
@@ -74,9 +75,8 @@ const AudioEngine: React.FC = () => {
   const activeNodesRef = useRef<AudioNode[]>([]);
 
   const playInternalUISound = useCallback((type: 'beep' | 'click') => {
-    if (!audioContextRef.current || !uiGainRef.current) return;
     const ctx = audioContextRef.current;
-    if (ctx.state === 'suspended') void ctx.resume();
+    if (ctx?.state !== 'running' || !uiGainRef.current) return;
 
     const now = ctx.currentTime;
     const oscillator = ctx.createOscillator();
@@ -94,9 +94,8 @@ const AudioEngine: React.FC = () => {
   }, []);
 
   const playSignalLockTone = useCallback((frequency: number) => {
-    if (!audioContextRef.current || !uiGainRef.current) return;
     const ctx = audioContextRef.current;
-    if (ctx.state === 'suspended') void ctx.resume();
+    if (ctx?.state !== 'running' || !uiGainRef.current) return;
 
     const now = ctx.currentTime;
     const carrier = ctx.createOscillator();
@@ -125,8 +124,8 @@ const AudioEngine: React.FC = () => {
     harmonic.stop(now + 0.78);
   }, []);
 
-  const initAudio = useCallback((startMuted: boolean) => {
-    if (audioContextRef.current) return;
+  const initAudio = () => {
+    if (audioContextRef.current) return audioContextRef.current;
 
     const AudioContextClass = getAudioContextConstructor();
     if (!AudioContextClass) return;
@@ -139,9 +138,8 @@ const AudioEngine: React.FC = () => {
     masterGain.connect(ctx.destination);
 
     const ambienceGain = ctx.createGain();
-    ambienceGain.gain.value = startMuted ? 0.001 : 0.38;
+    ambienceGain.gain.value = 0.38;
     ambienceGain.connect(masterGain);
-    ambienceGainRef.current = ambienceGain;
 
     const uiGain = ctx.createGain();
     uiGain.gain.value = 0.35;
@@ -179,14 +177,14 @@ const AudioEngine: React.FC = () => {
     [55, 55.5, 110].forEach((frequency) => createTone(ctx, foundationGain, activeNodesRef.current, frequency, 'sawtooth', 0.025));
 
     setIsInitialized(true);
-    if (startMuted) void ctx.suspend();
-  }, [selectedDistrict.id]);
+    return ctx;
+  };
 
   useEffect(() => {
-    if (lastSoundTrigger && isInitialized) {
+    if (lastSoundTrigger && !isMuted) {
       playInternalUISound(lastSoundTrigger.type);
     }
-  }, [lastSoundTrigger, isInitialized, playInternalUISound]);
+  }, [lastSoundTrigger, isMuted, playInternalUISound]);
 
   useEffect(() => {
     if (!latestSignal || !isInitialized || isMuted) return;
@@ -213,38 +211,41 @@ const AudioEngine: React.FC = () => {
   }, [selectedDistrict.id, isInitialized]);
 
   useEffect(() => {
-    const activeNodes = activeNodesRef.current;
-    const audioContext = audioContextRef.current;
-
     return () => {
-      activeNodes.forEach((node) => {
-        if ('stop' in node && typeof node.stop === 'function') {
-          node.stop();
-        }
-      });
-      void audioContext?.close();
+      const context = audioContextRef.current;
+      audioContextRef.current = null;
+      activeNodesRef.current = [];
+      if (context && context.state !== 'closed') void context.close().catch(() => {});
     };
   }, []);
 
-  const toggleMute = () => {
-    if (!isInitialized) {
-      initAudio(false);
-      setIsMuted(false);
-      window.setTimeout(() => playInternalUISound('click'), 50);
-      return;
-    }
+  const toggleMute = async () => {
+    if (isStarting || audioUnavailable) return;
 
-    const ctx = audioContextRef.current;
-    if (!ctx) return;
-
-    if (isMuted) {
-      void ctx.resume();
-      ambienceGainRef.current?.gain.setTargetAtTime(0.38, ctx.currentTime, 0.4);
-    } else {
-      ambienceGainRef.current?.gain.setTargetAtTime(0.001, ctx.currentTime, 0.4);
+    setIsStarting(true);
+    try {
+      const ctx = initAudio();
+      if (!ctx) {
+        setAudioUnavailable(true);
+        return;
+      }
+      if (isMuted) {
+        await ctx.resume();
+        playInternalUISound('click');
+      } else {
+        await ctx.suspend();
+      }
+      setIsMuted(!isMuted);
+    } catch {
+      const context = audioContextRef.current;
+      audioContextRef.current = null;
+      activeNodesRef.current = [];
+      if (context && context.state !== 'closed') void context.close().catch(() => {});
+      setIsInitialized(false);
+      setIsMuted(true);
+    } finally {
+      setIsStarting(false);
     }
-    playInternalUISound('click');
-    setIsMuted((prev) => !prev);
   };
 
   return (
@@ -252,9 +253,11 @@ const AudioEngine: React.FC = () => {
       <button
         className={`mute-button ${isMuted ? 'muted' : 'active'}`}
         onClick={toggleMute}
-        title={isMuted ? 'Enable Atmospheric Audio' : 'Mute Audio'}
+        title={audioUnavailable ? '当前无法播放环境音' : isMuted ? '开启环境音' : '关闭环境音'}
+        aria-label="环境音"
         type="button"
         aria-pressed={!isMuted}
+        aria-disabled={isStarting || audioUnavailable}
       >
         <div className="icon-container">
           {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}

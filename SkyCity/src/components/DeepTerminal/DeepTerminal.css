@@ -20,7 +20,7 @@
 }
 
 .deep-terminal-container.open {
-  height: 350px;
+  height: min(350px, 100dvh);
 }
 
 .deep-terminal-container.closed {
@@ -170,19 +170,22 @@
   outline: none;
 }
 
-.terminal-quick-actions button:disabled {
-  cursor: wait;
-  opacity: 0.42;
+.terminal-suggestion {
+  align-self: flex-start;
+  padding: 4px 7px;
+  border-radius: 4px;
+  background: rgba(74, 222, 128, 0.1);
+  color: var(--accent-green);
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
 }
 
-.typing-cursor {
-  display: inline-block;
-  width: 8px;
-  height: 15px;
-  background: var(--accent-green);
-  margin-left: 5px;
-  animation: terminalBlink 0.8s infinite;
-  vertical-align: middle;
+.terminal-suggestion kbd {
+  margin-right: 4px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  padding: 0 3px;
 }
 
 .terminal-input-form {
@@ -203,6 +206,7 @@
 
 .terminal-input {
   flex: 1;
+  min-width: 0;
   background: transparent;
   border: none;
   outline: none;
@@ -210,6 +214,10 @@
   font-family: inherit;
   font-size: 13px;
   letter-spacing: 1px;
+}
+
+.terminal-input-form:focus-within {
+  border-color: var(--accent-green);
 }
 
 .terminal-input::placeholder {
@@ -247,11 +255,6 @@
   background: var(--accent-green);
 }
 
-@keyframes terminalBlink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
-}
-
 @keyframes terminalPulse {
   0% { transform: scale(1); opacity: 0.8; }
   50% { transform: scale(1.05); opacity: 1; }
@@ -271,7 +274,7 @@
 
   .deep-terminal-container.open {
     width: calc(100vw - 20px);
-    height: min(350px, 62vh);
+    height: min(350px, 78dvh);
   }
 
   .terminal-header {

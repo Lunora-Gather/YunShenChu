@@ -1,5 +1,7 @@
+import { advanceWatch, initialWatch } from '../data/nightWatch';
+import type { WatchBook, WatchAction } from '../data/nightWatch';
 /* eslint-disable react-refresh/only-export-components */
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import worldData from '../data/world.json';
 import districtsData from '../data/districts.json';
@@ -8,6 +10,26 @@ import pastWorldData from '../data/past_world.json';
 import pastDistrictsData from '../data/past_districts.json';
 import { getSignalById, SIGNAL_CATALOG } from '../data/signals';
 import type { InvestigationAction, InvestigationStage, SignalIntel } from '../data/signals';
+import { checkFinding, DEPARTURE_CHOICES, getCaseFile, hasFiledAllFindings, REPORT_ACTION_ID } from '../data/caseFiles';
+import type { CaseSubmission, DepartureChoice, DepartureDecision } from '../data/caseFiles';
+import { getInstrument, verifyInstrument } from '../data/instruments';
+import type { InstrumentInput } from '../data/instruments';
+import {
+  canUseObserverStorage,
+  createObserverBackup,
+  MAX_PERSISTED_DIARY_ENTRIES,
+  MAX_SESSION_DIARY_ENTRIES,
+  mergeObserverProgress,
+  OBSERVER_STORAGE_KEY,
+  OBSERVER_STORAGE_VERSION,
+  parseObserverStorage,
+  readObserverStorage,
+  restoreObserverStorage,
+  readObserverSlot,
+  writeObserverSlot,
+  withObserverStorageLock,
+} from './observerStorage';
+import type { DiaryEntry, ObserverBackup, ObserverRestoreResult, ObserverStorageState } from './observerStorage';
 
 interface District {
   id: string;
@@ -37,31 +59,19 @@ type ResonanceLevel = 'quiet' | 'watch' | 'unstable' | 'breach';
 
 const presentDistricts = districtsData as DistrictSource[];
 const archiveDistricts = pastDistrictsData as DistrictSource[];
-const OBSERVER_STORAGE_VERSION = 3;
-const OBSERVER_STORAGE_KEY = 'yunshenchu.observer.v3';
-const LEGACY_OBSERVER_STORAGE_KEYS = ['yunshenchu.observer.v2'];
 const ALERT_DEDUPE_WINDOW_MS = 6500;
-const MAX_SESSION_DIARY_ENTRIES = 80;
-const MAX_PERSISTED_DIARY_ENTRIES = 48;
-
-export interface DiaryEntry {
-  id: string;
-  timestamp: Date;
-  type: 'visit' | 'discovery' | 'system' | 'secret';
-  location?: string;
-  message: string;
-}
 
 interface CityState {
-  currentTime: Date;
+  nightWatch?: WatchBook;
+  recordWatch: (action: WatchAction) => void;
   selectedDistrict: District;
   districts: District[];
   activeDirective: string;
   weather: WeatherState;
   alerts: SystemAlert[];
   diary: DiaryEntry[];
-  isDay: boolean;
   setDistrict: (id: string) => void;
+  visitLiveDistrict: (id: string) => void;
   playUISound: (type?: 'beep' | 'click') => void;
   lastSoundTrigger: { type: 'beep' | 'click'; timestamp: number } | null;
   addAlert: (message: string, type?: 'info' | 'warning' | 'critical') => void;
@@ -72,11 +82,17 @@ interface CityState {
   signalIntel: SignalIntel[];
   signalTelemetry: SignalTelemetry;
   observerMemory: ObserverMemoryState;
+  exportObserverBackup: () => string;
+  restoreObserverBackup: (backup: ObserverBackup) => Promise<ObserverRestoreResult>;
   investigationState: InvestigationState;
   terminalCommandRequest: TerminalCommandRequest | null;
   diaryReviewRequest: DiaryReviewRequest | null;
   focusSignal: (id: string) => void;
   completeInvestigationAction: (signalId: string, actionId: string) => void;
+  captureInstrumentRecord: (signalId: string, actionId: string, sample: InstrumentInput) => string | null;
+  submitCaseFinding: (signalId: string, submission: CaseSubmission) => string | null;
+  departureDecision: DepartureDecision | null;
+  fileDepartureDecision: (choice: DepartureChoice) => void;
   requestTerminalAction: (signalId: string, actionId: string) => void;
   requestDiaryReview: (signalId: string, actionId: string) => void;
   registerSignalDiscovery: (signal: SignalIntel) => void;
@@ -98,7 +114,7 @@ interface SignalTelemetry {
   pressure: number;
   level: ResonanceLevel;
   nextLead: string;
-  activeImpacts: string[];
+  activeImpacts: SignalIntel[];
   unresolvedCount: number;
   districtSignalCounts: Record<string, number>;
 }
@@ -138,11 +154,8 @@ interface InvestigationState {
 
 interface TerminalCommandRequest {
   id: number;
-  signalId: string;
-  actionId: string;
   command: string;
   label: string;
-  autoRun: boolean;
 }
 
 interface DiaryReviewRequest {
@@ -153,162 +166,6 @@ interface DiaryReviewRequest {
 }
 
 const CityContext = createContext<CityState | undefined>(undefined);
-
-interface PersistedDiaryEntry extends Omit<DiaryEntry, 'timestamp'> {
-  timestamp: string;
-}
-
-interface ObserverStorageState {
-  schemaVersion: number;
-  discoveredSignalIds: string[];
-  latestSignalId: string | null;
-  diary: DiaryEntry[];
-  completedInvestigationActions: Record<string, string[]>;
-}
-
-const emptyObserverStorage: ObserverStorageState = {
-  schemaVersion: OBSERVER_STORAGE_VERSION,
-  discoveredSignalIds: [],
-  latestSignalId: null,
-  diary: [],
-  completedInvestigationActions: {},
-};
-
-const isDiaryType = (value: unknown): value is DiaryEntry['type'] => (
-  value === 'visit' || value === 'discovery' || value === 'system' || value === 'secret'
-);
-
-const normalizeSignalIds = (value: unknown) => {
-  if (!Array.isArray(value)) return [];
-
-  return Array.from(new Set(value))
-    .filter((id): id is string => typeof id === 'string' && Boolean(getSignalById(id)));
-};
-
-const normalizeCompletedInvestigationActions = (value: unknown) => {
-  if (!value || typeof value !== 'object') return {};
-
-  return Object.entries(value as Record<string, unknown>).reduce<Record<string, string[]>>((normalized, [signalId, actionIds]) => {
-    const signal = getSignalById(signalId);
-    if (!signal || !Array.isArray(actionIds)) return normalized;
-
-    const validActionIds = new Set(signal.investigation.actions.map((action) => action.id));
-    const uniqueActionIds = Array.from(new Set(actionIds))
-      .filter((actionId): actionId is string => typeof actionId === 'string' && validActionIds.has(actionId));
-
-    normalized[signal.id] = uniqueActionIds;
-
-    return normalized;
-  }, {});
-};
-
-const seedCompletedInvestigationActions = (
-  completedActionIds: Record<string, string[]>,
-  discoveredSignalIds: string[],
-) => {
-  return discoveredSignalIds.reduce<Record<string, string[]>>((seeded, signalId) => {
-    seeded[signalId] = seeded[signalId] ?? [];
-    return seeded;
-  }, { ...completedActionIds });
-};
-
-const parseDiaryEntry = (value: unknown): DiaryEntry | null => {
-  if (!value || typeof value !== 'object') return null;
-
-  const entry = value as Partial<PersistedDiaryEntry>;
-  if (
-    typeof entry.id !== 'string' ||
-    typeof entry.message !== 'string' ||
-    typeof entry.timestamp !== 'string' ||
-    !isDiaryType(entry.type)
-  ) {
-    return null;
-  }
-
-  const timestamp = new Date(entry.timestamp);
-  if (Number.isNaN(timestamp.getTime())) return null;
-
-  return {
-    id: entry.id,
-    message: entry.message,
-    timestamp,
-    type: entry.type,
-    location: typeof entry.location === 'string' ? entry.location : undefined,
-  };
-};
-
-const parseObserverStorage = (rawStorage: string | null): ObserverStorageState | null => {
-  if (!rawStorage) return null;
-
-  try {
-    const parsed = JSON.parse(rawStorage) as Partial<{
-      schemaVersion: unknown;
-      discoveredSignalIds: unknown;
-      latestSignalId: unknown;
-      diary: unknown;
-      completedInvestigationActions: unknown;
-    }>;
-
-    const discoveredSignalIds = normalizeSignalIds(parsed.discoveredSignalIds);
-    const latestSignalId = typeof parsed.latestSignalId === 'string' && discoveredSignalIds.includes(parsed.latestSignalId)
-      ? parsed.latestSignalId
-      : discoveredSignalIds[0] ?? null;
-    const diary = Array.isArray(parsed.diary)
-      ? parsed.diary
-        .map(parseDiaryEntry)
-        .filter((entry): entry is DiaryEntry => Boolean(entry))
-        .slice(0, MAX_PERSISTED_DIARY_ENTRIES)
-      : [];
-
-    return {
-      schemaVersion: typeof parsed.schemaVersion === 'number' ? parsed.schemaVersion : 2,
-      discoveredSignalIds,
-      latestSignalId,
-      diary,
-      completedInvestigationActions: seedCompletedInvestigationActions(
-        normalizeCompletedInvestigationActions(parsed.completedInvestigationActions),
-        discoveredSignalIds,
-      ),
-    };
-  } catch {
-    return null;
-  }
-};
-
-const readObserverStorage = (): ObserverStorageState => {
-  if (typeof window === 'undefined') return emptyObserverStorage;
-
-  const currentStorage = parseObserverStorage(window.localStorage.getItem(OBSERVER_STORAGE_KEY));
-  if (currentStorage) return currentStorage;
-
-  for (const legacyKey of LEGACY_OBSERVER_STORAGE_KEYS) {
-    const legacyStorage = parseObserverStorage(window.localStorage.getItem(legacyKey));
-    if (legacyStorage) return legacyStorage;
-  }
-
-  return emptyObserverStorage;
-};
-
-const canUseObserverStorage = () => {
-  if (typeof window === 'undefined') return false;
-
-  try {
-    const probeKey = `${OBSERVER_STORAGE_KEY}.probe`;
-    window.localStorage.setItem(probeKey, '1');
-    window.localStorage.removeItem(probeKey);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-const getStoredCounterFloor = (storage: ObserverStorageState) => {
-  const diaryNumbers = storage.diary
-    .map((entry) => Number(entry.id.match(/-(\d+)$/)?.[1] ?? 0))
-    .filter(Number.isFinite);
-
-  return Math.max(0, ...diaryNumbers);
-};
 
 const getInvestigationStage = (signal: SignalIntel, isDiscovered: boolean, completedActionIds: string[]): InvestigationStage => {
   if (!isDiscovered) return 'sealed';
@@ -322,11 +179,14 @@ const getInvestigationStageText = (signal: SignalIntel, stage: InvestigationStag
   return signal.investigation[stage];
 };
 
-export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [storedObserverState] = useState<ObserverStorageState>(readObserverStorage);
-  const [canPersistObserverMemory] = useState(canUseObserverStorage);
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [selectedDistrictId, setSelectedDistrictId] = useState(districtsData[0].id);
+export const CityProvider: React.FC<{ children: ReactNode; initialDistrict?: string; storageKey?: string; observing?: boolean }> = ({
+  children, initialDistrict, storageKey = OBSERVER_STORAGE_KEY, observing = true,
+}) => {
+  const [storedObserverState] = useState<ObserverStorageState>(() => readObserverStorage(storageKey));
+  const [canPersistObserverMemory, setCanPersistObserverMemory] = useState(() => (
+    storedObserverState.schemaVersion <= OBSERVER_STORAGE_VERSION && canUseObserverStorage(storageKey)
+  ));
+  const [selectedDistrictId, setSelectedDistrictId] = useState(() => initialDistrict ?? getSignalById(storedObserverState.latestSignalId ?? '')?.districtId ?? 'foundation');
   const [alerts, setAlerts] = useState<SystemAlert[]>([]);
   const [diary, setDiary] = useState<DiaryEntry[]>(storedObserverState.diary);
   const [lastSoundTrigger, setLastSoundTrigger] = useState<{ type: 'beep' | 'click'; timestamp: number } | null>(null);
@@ -334,19 +194,46 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [discoveredSignalIds, setDiscoveredSignalIds] = useState<string[]>(storedObserverState.discoveredSignalIds);
   const [latestSignalId, setLatestSignalId] = useState<string | null>(storedObserverState.latestSignalId);
   const [completedInvestigationActions, setCompletedInvestigationActions] = useState<Record<string, string[]>>(storedObserverState.completedInvestigationActions);
+  const [nightWatch, setNightWatch] = useState(storedObserverState.nightWatch);
+  const watchRef = useRef(storedObserverState.nightWatch);
+  const [departureDecision, setDepartureDecision] = useState(storedObserverState.departureDecision);
   const [terminalCommandRequest, setTerminalCommandRequest] = useState<TerminalCommandRequest | null>(null);
   const [diaryReviewRequest, setDiaryReviewRequest] = useState<DiaryReviewRequest | null>(null);
-  const idCounterRef = useRef(getStoredCounterFloor(storedObserverState));
+  const alertCounterRef = useRef(0);
   const requestCounterRef = useRef(0);
   const discoveredSignalIdsRef = useRef<string[]>(storedObserverState.discoveredSignalIds);
   const completedInvestigationActionsRef = useRef<Record<string, string[]>>(storedObserverState.completedInvestigationActions);
+  const departureDecisionRef = useRef(storedObserverState.departureDecision);
+  const focusedSignalRef = useRef(storedObserverState.latestSignalId);
+  const diaryRef = useRef(storedObserverState.diary);
+  const savedLocalFocus = useRef(storedObserverState.latestSignalId);
   const alertDedupeRef = useRef<Record<string, number>>({});
 
-  const nextId = useCallback((prefix: string) => {
-    idCounterRef.current += 1;
-    return `${prefix}-${idCounterRef.current}`;
+  const recordWatch = useCallback((action: WatchAction) => {
+    const current = watchRef.current ?? initialWatch;
+    const permit = action.type === 'accept' && hasFiledAllFindings(completedInvestigationActionsRef.current)
+      ? departureDecisionRef.current?.choice ?? 'local' : undefined;
+    const next = advanceWatch(current, action, permit);
+    if (next === current) return;
+    watchRef.current = next;
+    setNightWatch(next);
   }, []);
-  
+
+  const setObserverFocus = useCallback((id: string | null) => {
+    focusedSignalRef.current = id;
+    setLatestSignalId(id);
+  }, []);
+
+  const snapshotObserverState = useCallback((): ObserverStorageState => ({
+    schemaVersion: OBSERVER_STORAGE_VERSION,
+    discoveredSignalIds: discoveredSignalIdsRef.current,
+    completedInvestigationActions: completedInvestigationActionsRef.current,
+    nightWatch: watchRef.current,
+    departureDecision: departureDecisionRef.current,
+    latestSignalId: focusedSignalRef.current,
+    diary: diaryRef.current,
+  }), []);
+
   // Dynamic City State
   const [districts, setDistricts] = useState<District[]>(() => {
     // Initialize population distribution
@@ -359,14 +246,29 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       social_metrics: d.social_metrics || { happiness: 80, education: 80, productivity: 80 }
     }));
   });
-  const [activeDirective, setActiveDirective] = useState(worldData.active_directives[0]);
-  const [world, setWorld] = useState<WorldState>(worldData);
-  const [weather, setWeather] = useState<WeatherState>(worldData.weather);
+  const [liveDirective, setLiveDirective] = useState(worldData.active_directives[0]);
+  const [liveWorld, setLiveWorld] = useState<WorldState>(worldData);
+  const [liveWeather, setLiveWeather] = useState<WeatherState>(worldData.weather);
 
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+  const hasOpenAnomaly = (id: string) => discoveredSignalIds.includes(id)
+    && !completedInvestigationActions[id]?.includes(REPORT_ACTION_ID);
+  const ventPressure = hasOpenAnomaly('abyss-whale');
+  const corePulse = hasOpenAnomaly('core-heartbeat');
+  const liveVentWeather = useMemo(() => ventPressure ? {
+    ...liveWeather, current_condition: 'Under-cloud Pressure Waves', wind_speed: Math.max(liveWeather.wind_speed, 18),
+  } : liveWeather, [liveWeather, ventPressure]);
+  const observedLiveWorld = useMemo(() => corePulse ? {
+    ...liveWorld,
+    global_stats: {
+      ...liveWorld.global_stats,
+      energy_index: Math.max(70, Number((liveWorld.global_stats.energy_index - 0.9).toFixed(1))),
+    },
+  } : liveWorld, [corePulse, liveWorld]);
+  const world: WorldState = isPastMode ? pastWorldData : observedLiveWorld;
+  const weather = isPastMode ? pastWorldData.weather : liveVentWeather;
+  const departureDirective = departureDecision ? DEPARTURE_CHOICES[departureDecision.choice].directive : null;
+  const activeDirective = isPastMode ? pastWorldData.active_directives[0] : departureDirective ?? liveDirective;
+  const liveDistrictBeforeArchive = useRef(presentDistricts[0].id);
 
   const currentDistricts = useMemo<District[]>(() => {
     if (!isPastMode) return districts;
@@ -381,20 +283,9 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return currentDistricts.find(d => d.id === selectedDistrictId) || currentDistricts[0];
   }, [currentDistricts, selectedDistrictId]);
   
-  // Day/Night logic: 6 AM to 6 PM is day
-  const hour = currentTime.getHours();
-  const isDay = hour >= 6 && hour < 18;
-
   const playUISound = useCallback((type: 'beep' | 'click' = 'beep') => {
     setLastSoundTrigger({ type, timestamp: Date.now() });
   }, []);
-
-  const setDistrict = useCallback((id: string) => {
-    if (id !== selectedDistrictId) {
-      setSelectedDistrictId(id);
-      playUISound('beep');
-    }
-  }, [playUISound, selectedDistrictId]);
 
   const removeAlert = useCallback((id: string) => {
     setAlerts(prev => prev.filter(a => a.id !== id));
@@ -410,24 +301,25 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     alertDedupeRef.current[dedupeKey] = now;
-    const id = nextId('alert');
+    const id = `alert-${++alertCounterRef.current}`;
     const newAlert = { id, message, type, timestamp: new Date(now) };
     setAlerts(prev => [newAlert, ...prev].slice(0, 5));
     
     // Auto-remove alert after 10 seconds
     setTimeout(() => removeAlert(id), 10000);
-  }, [nextId, removeAlert]);
+  }, [removeAlert]);
 
   const addDiaryEntry = useCallback((message: string, type: DiaryEntry['type'], location?: string) => {
     const entry: DiaryEntry = {
-      id: nextId('diary'),
+      id: `diary-${crypto.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`}`,
       timestamp: new Date(),
       type,
       location,
       message
     };
-    setDiary(prev => [entry, ...prev].slice(0, MAX_SESSION_DIARY_ENTRIES));
-  }, [nextId]);
+    diaryRef.current = [entry, ...diaryRef.current].slice(0, MAX_SESSION_DIARY_ENTRIES);
+    setDiary(diaryRef.current);
+  }, []);
 
   const signalIntel = useMemo(() => {
     return discoveredSignalIds
@@ -439,48 +331,16 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return latestSignalId ? getSignalById(latestSignalId) : null;
   }, [latestSignalId]);
 
-  const signalTelemetry = useMemo<SignalTelemetry>(() => {
-    const discoveredSet = new Set(discoveredSignalIds);
-    const unresolvedSignal = SIGNAL_CATALOG.find((signal) => !discoveredSet.has(signal.id));
-    const weatherPressure = weather.current_condition.toLowerCase().includes('storm') || weather.current_condition.toLowerCase().includes('pressure') ? 10 : 0;
-    const energyPressure = Math.max(0, Math.round((92 - world.global_stats.energy_index) * 1.8));
-    const signalPressure = signalIntel.reduce((total, signal) => total + signal.pressure, 0);
-    const pressure = Math.min(100, Math.max(0, signalPressure + weatherPressure + energyPressure));
-
-    const level: ResonanceLevel = pressure >= 72
-      ? 'breach'
-      : pressure >= 48
-        ? 'unstable'
-        : pressure >= 22
-          ? 'watch'
-          : 'quiet';
-
-    const districtSignalCounts = signalIntel.reduce<Record<string, number>>((counts, signal) => {
-      const key = signal.districtId ?? 'citywide';
-      counts[key] = (counts[key] ?? 0) + 1;
-      return counts;
-    }, {});
-
-    return {
-      pressure,
-      level,
-      nextLead: latestSignal?.lead ?? unresolvedSignal?.lead ?? 'All known signal threads are resolved. Maintain passive listening.',
-      activeImpacts: signalIntel.map((signal) => signal.impact).slice(0, 4),
-      unresolvedCount: SIGNAL_CATALOG.length - discoveredSignalIds.length,
-      districtSignalCounts,
-    };
-  }, [discoveredSignalIds, latestSignal, signalIntel, weather.current_condition, world.global_stats.energy_index]);
-
   const observerMemory = useMemo<ObserverMemoryState>(() => ({
     canPersist: canPersistObserverMemory,
-    restored: Boolean(storedObserverState.latestSignalId || storedObserverState.discoveredSignalIds.length || storedObserverState.diary.length),
+    restored: Boolean(storedObserverState.nightWatch || storedObserverState.latestSignalId || storedObserverState.discoveredSignalIds.length || storedObserverState.diary.length),
     discoveredCount: discoveredSignalIds.length,
     diaryCount: diary.length,
     diaryLimit: MAX_SESSION_DIARY_ENTRIES,
     persistedDiaryLimit: MAX_PERSISTED_DIARY_ENTRIES,
-    storageKey: OBSERVER_STORAGE_KEY,
+    storageKey,
     schemaVersion: OBSERVER_STORAGE_VERSION,
-  }), [canPersistObserverMemory, diary.length, discoveredSignalIds.length, storedObserverState]);
+  }), [canPersistObserverMemory, diary.length, discoveredSignalIds.length, storageKey, storedObserverState]);
 
   const investigationState = useMemo<InvestigationState>(() => {
     const discoveredSet = new Set(discoveredSignalIds);
@@ -522,14 +382,47 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, [completedInvestigationActions, discoveredSignalIds, latestSignal]);
 
+  const signalTelemetry = useMemo<SignalTelemetry>(() => {
+    const discoveredSet = new Set(discoveredSignalIds);
+    const unresolvedSignal = SIGNAL_CATALOG.find((signal) => !discoveredSet.has(signal.id));
+    const weatherPressure = weather.current_condition.toLowerCase().includes('storm') || weather.current_condition.toLowerCase().includes('pressure') ? 10 : 0;
+    const energyPressure = Math.max(0, Math.round((92 - world.global_stats.energy_index) * 1.8));
+    const activeSignals = signalIntel.filter((signal) => investigationState.threads[signal.id].stage !== 'contained');
+    const signalPressure = activeSignals.reduce((total, signal) => total + signal.pressure, 0);
+    const pressure = Math.min(100, Math.max(0, signalPressure + weatherPressure + energyPressure));
+
+    const level: ResonanceLevel = pressure >= 72
+      ? 'breach'
+      : pressure >= 48
+        ? 'unstable'
+        : pressure >= 22
+          ? 'watch'
+          : 'quiet';
+
+    const districtSignalCounts = signalIntel.reduce<Record<string, number>>((counts, signal) => {
+      const key = signal.districtId ?? 'citywide';
+      counts[key] = (counts[key] ?? 0) + 1;
+      return counts;
+    }, {});
+
+    return {
+      pressure,
+      level,
+      nextLead: investigationState.nextAction?.action.description ?? unresolvedSignal?.lead ?? '全部案卷已归档，可查阅零号月台的调度单。',
+      activeImpacts: activeSignals,
+      unresolvedCount: SIGNAL_CATALOG.length - discoveredSignalIds.length,
+      districtSignalCounts,
+    };
+  }, [discoveredSignalIds, investigationState, signalIntel, weather.current_condition, world.global_stats.energy_index]);
+
   const focusSignal = useCallback((id: string) => {
     if (discoveredSignalIdsRef.current.includes(id)) {
-      setLatestSignalId(id);
+      setObserverFocus(id);
       playUISound('click');
     }
-  }, [playUISound]);
+  }, [playUISound, setObserverFocus]);
 
-  const completeInvestigationAction = useCallback((signalId: string, actionId: string) => {
+  const recordInvestigationAction = useCallback((signalId: string, actionId: string) => {
     const signal = getSignalById(signalId);
     if (!signal || !discoveredSignalIdsRef.current.includes(signal.id)) return;
 
@@ -538,7 +431,7 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const currentActionIds = completedInvestigationActionsRef.current[signal.id] ?? [];
     if (currentActionIds.includes(action.id)) {
-      setLatestSignalId(signal.id);
+      setObserverFocus(signal.id);
       playUISound('click');
       return;
     }
@@ -550,16 +443,89 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
     completedInvestigationActionsRef.current = nextCompletedActions;
     setCompletedInvestigationActions(nextCompletedActions);
-    setLatestSignalId(signal.id);
+    setObserverFocus(signal.id);
     playUISound('click');
 
     const nextStage = getInvestigationStage(signal, true, nextActionIds);
-    addDiaryEntry(`Investigation advanced for ${signal.title}: ${action.label}. Stage=${nextStage}.`, 'secret', signal.districtId);
+    const dispatch = action.type === 'report' ? getCaseFile(signal.id)?.dispatch : undefined;
+    addDiaryEntry(dispatch ? `Finding filed for ${signal.title}. ${dispatch}` : `Field record captured for ${signal.title}: ${action.label}.`, 'secret', signal.districtId);
 
     if (nextStage === 'contained') {
       addAlert(`INVESTIGATION CONTAINED: ${signal.title}`, signal.severity);
     }
+  }, [addAlert, addDiaryEntry, playUISound, setObserverFocus]);
+
+  const completeInvestigationAction = useCallback((signalId: string, actionId: string) => {
+    if (actionId !== REPORT_ACTION_ID && !getInstrument(signalId, actionId)) recordInvestigationAction(signalId, actionId);
+  }, [recordInvestigationAction]);
+
+  const captureInstrumentRecord = useCallback((signalId: string, actionId: string, sample: InstrumentInput) => {
+    if (!discoveredSignalIdsRef.current.includes(signalId)) return '先锁定信号，再采集样本。';
+    const actionIds = completedInvestigationActionsRef.current[signalId] ?? [];
+    if (actionIds.includes(actionId)) return null;
+    if (signalId === 'ghost-rail' && actionId === 'review-archive' && !actionIds.includes('trace-ghost-rail')) {
+      return '先调取道岔的放行日志，再核对许可。';
+    }
+    if (sample.kind === 'clock' && isPastMode) return '请返回当班日记，再应用时钟修正量。';
+    const feedback = verifyInstrument(signalId, actionId, sample);
+    if (!feedback) recordInvestigationAction(signalId, actionId);
+    return feedback;
+  }, [isPastMode, recordInvestigationAction]);
+
+  const submitCaseFinding = useCallback((signalId: string, submission: CaseSubmission) => {
+    const file = getCaseFile(signalId);
+    if (!file || !discoveredSignalIdsRef.current.includes(signalId)) return '先锁定本案信号，再提交结论。';
+
+    const actionIds = completedInvestigationActionsRef.current[signalId] ?? [];
+    const reason = checkFinding(file, actionIds, submission);
+    if (!reason && !actionIds.includes(REPORT_ACTION_ID)) recordInvestigationAction(signalId, REPORT_ACTION_ID);
+    return reason;
+  }, [recordInvestigationAction]);
+
+  const fileDepartureDecision = useCallback((choice: DepartureChoice) => {
+    if (departureDecisionRef.current || !hasFiledAllFindings(completedInvestigationActionsRef.current)) return;
+    if (!Object.hasOwn(DEPARTURE_CHOICES, choice)) return;
+
+    const directive = DEPARTURE_CHOICES[choice];
+    const decision = { choice, recordedAt: Date.now() };
+    departureDecisionRef.current = decision;
+    setDepartureDecision(decision);
+    addAlert(`PLATFORM 0 TRANSMISSION: ${directive.label}`, 'info');
+    addDiaryEntry(`Observer transmitted "${directive.label}" for Departure Q-17. Read the dispatch receipt for the current directive.`, 'secret', 'foundation');
+    playUISound('click');
   }, [addAlert, addDiaryEntry, playUISound]);
+
+  const setDistrict = useCallback((id: string) => {
+    const district = currentDistricts.find((item) => item.id === id);
+    if (!district) return;
+
+    if (id !== selectedDistrictId) {
+      setSelectedDistrictId(id);
+      playUISound('beep');
+      addDiaryEntry(`Observer inspected ${district.name}.`, 'visit', district.name);
+    }
+
+    if (isPastMode || !latestSignal) return;
+
+    const action = latestSignal.investigation.actions.find((item) => item.type === 'district' && item.districtId === id);
+    if (action && !completedInvestigationActionsRef.current[latestSignal.id]?.includes(action.id)) {
+      completeInvestigationAction(latestSignal.id, action.id);
+    }
+  }, [addDiaryEntry, completeInvestigationAction, currentDistricts, isPastMode, latestSignal, playUISound, selectedDistrictId]);
+
+  const visitLiveDistrict = useCallback((id: string) => {
+    const district = presentDistricts.find((item) => item.id === id);
+    if (!district) return;
+
+    if (isPastMode) {
+      setIsPastMode(false);
+      addAlert('TEMPORAL STABILIZED: Returning to Present', 'info');
+    }
+    setSelectedDistrictId(id);
+    if (isPastMode || id !== selectedDistrictId) {
+      addDiaryEntry(`Observer inspected ${district.name}.`, 'visit', district.name);
+    }
+  }, [addAlert, addDiaryEntry, isPastMode, selectedDistrictId]);
 
   const requestTerminalAction = useCallback((signalId: string, actionId: string) => {
     const signal = getSignalById(signalId);
@@ -569,17 +535,14 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!action || action.type !== 'terminal' || !action.command) return;
 
     requestCounterRef.current += 1;
-    setLatestSignalId(signal.id);
+    setObserverFocus(signal.id);
     setTerminalCommandRequest({
       id: requestCounterRef.current,
-      signalId: signal.id,
-      actionId: action.id,
       command: action.command,
       label: action.label,
-      autoRun: true,
     });
     playUISound('click');
-  }, [playUISound]);
+  }, [playUISound, setObserverFocus]);
 
   const requestDiaryReview = useCallback((signalId: string, actionId: string) => {
     const signal = getSignalById(signalId);
@@ -589,7 +552,7 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!action || action.type !== 'diary') return;
 
     requestCounterRef.current += 1;
-    setLatestSignalId(signal.id);
+    setObserverFocus(signal.id);
     setDiaryReviewRequest({
       id: requestCounterRef.current,
       signalId: signal.id,
@@ -597,11 +560,11 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       label: action.label,
     });
     playUISound('click');
-  }, [playUISound]);
+  }, [playUISound, setObserverFocus]);
 
   const registerSignalDiscovery = useCallback((signal: SignalIntel) => {
     const alreadyDiscovered = discoveredSignalIdsRef.current.includes(signal.id);
-    setLatestSignalId(signal.id);
+    setObserverFocus(signal.id);
     playUISound('beep');
 
     if (alreadyDiscovered) {
@@ -620,106 +583,162 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     addAlert(`SIGNAL LOCKED: ${signal.title}`, signal.severity);
     addDiaryEntry(`Signal locked at ${signal.freq.toFixed(1)}MHz: ${signal.title}. ${signal.evidence}`, 'secret', signal.districtId);
 
-    if (signal.id === 'abyss-whale') {
-      setWeather(prev => ({
-        ...prev,
-        current_condition: 'Under-cloud Pressure Waves',
-        wind_speed: Math.max(prev.wind_speed, 18),
-      }));
-    }
-
-    if (signal.id === 'core-heartbeat') {
-      setWorld(prev => ({
-        ...prev,
-        global_stats: {
-          ...prev.global_stats,
-          energy_index: Math.max(70, Number((prev.global_stats.energy_index - 0.9).toFixed(1))),
-        },
-      }));
-    }
-
     if (signal.id === 'observer-return') {
       addAlert('OBSERVER LOOP DETECTED: Local session telemetry reflected back to console', 'critical');
     }
-  }, [addAlert, addDiaryEntry, playUISound]);
+  }, [addAlert, addDiaryEntry, playUISound, setObserverFocus]);
+
+  const applyObserverProgress = useCallback((progress: ObserverStorageState) => {
+    if (progress.nightWatch !== watchRef.current) {
+      watchRef.current = progress.nightWatch;
+      setNightWatch(progress.nightWatch);
+    }
+    if (progress.discoveredSignalIds !== discoveredSignalIdsRef.current) {
+      discoveredSignalIdsRef.current = progress.discoveredSignalIds;
+      setDiscoveredSignalIds(progress.discoveredSignalIds);
+    }
+    if (progress.completedInvestigationActions !== completedInvestigationActionsRef.current) {
+      completedInvestigationActionsRef.current = progress.completedInvestigationActions;
+      setCompletedInvestigationActions(progress.completedInvestigationActions);
+    }
+    if (progress.departureDecision !== departureDecisionRef.current) {
+      departureDecisionRef.current = progress.departureDecision;
+      setDepartureDecision(progress.departureDecision);
+    }
+    if (progress.diary !== diaryRef.current) {
+      diaryRef.current = progress.diary;
+      setDiary(progress.diary);
+    }
+    if (progress.latestSignalId !== focusedSignalRef.current) {
+      savedLocalFocus.current = progress.latestSignalId;
+      setObserverFocus(progress.latestSignalId);
+    }
+  }, [setObserverFocus]);
+
+  const syncObserverProgress = useCallback((stored: ObserverStorageState) => {
+    if (stored.schemaVersion > OBSERVER_STORAGE_VERSION) {
+      setCanPersistObserverMemory(false);
+      return;
+    }
+
+    const local = snapshotObserverState();
+    const merged = mergeObserverProgress(local, stored);
+    applyObserverProgress({ ...merged, latestSignalId: local.latestSignalId ?? stored.latestSignalId });
+  }, [applyObserverProgress, snapshotObserverState]);
+
+  const exportObserverBackup = useCallback(() => createObserverBackup(snapshotObserverState(), storageKey),
+    [snapshotObserverState, storageKey]);
+
+  const restoreObserverBackup = useCallback(async (backup: ObserverBackup): Promise<ObserverRestoreResult> => {
+    try {
+      return await withObserverStorageLock(storageKey, (): ObserverRestoreResult => {
+        const result = restoreObserverStorage(window.localStorage, storageKey, snapshotObserverState(), backup);
+        if ('error' in result) return { saved: false, message: result.error };
+
+        applyObserverProgress(result.progress);
+        savedLocalFocus.current = result.progress.latestSignalId;
+        setCanPersistObserverMemory(true);
+        return { saved: true, keptEnding: result.keptEnding };
+      });
+    } catch {
+      return { saved: false, message: '当前无法写入本机存储。存储恢复后仍可导入这份备份。' };
+    }
+  }, [applyObserverProgress, snapshotObserverState, storageKey]);
 
   useEffect(() => {
-    discoveredSignalIdsRef.current = discoveredSignalIds;
-  }, [discoveredSignalIds]);
+    if (!canPersistObserverMemory) return;
+
+    const receive = (event: StorageEvent) => {
+      if (event.key !== storageKey || event.storageArea !== window.localStorage) return;
+      const stored = parseObserverStorage(event.newValue);
+      if (stored) syncObserverProgress(stored);
+    };
+    window.addEventListener('storage', receive);
+    return () => window.removeEventListener('storage', receive);
+  }, [canPersistObserverMemory, storageKey, syncObserverProgress]);
 
   useEffect(() => {
-    completedInvestigationActionsRef.current = completedInvestigationActions;
-  }, [completedInvestigationActions]);
+    if (!canPersistObserverMemory) return;
+    let active = true;
 
-  useEffect(() => {
-    if (!canPersistObserverMemory || typeof window === 'undefined') return;
+    const save = () => {
+      if (!active) return;
+      try {
+        const local = snapshotObserverState();
+        const storage = window.localStorage;
+        const slot = readObserverSlot(storage, storageKey);
+        const stored = slot.progress;
+        if (stored && stored.schemaVersion > OBSERVER_STORAGE_VERSION) {
+          queueMicrotask(() => syncObserverProgress(stored));
+          return;
+        }
 
-    const payload = {
-      schemaVersion: OBSERVER_STORAGE_VERSION,
-      discoveredSignalIds,
-      latestSignalId,
-      completedInvestigationActions: seedCompletedInvestigationActions(completedInvestigationActions, discoveredSignalIds),
-      diary: diary.slice(0, MAX_PERSISTED_DIARY_ENTRIES).map((entry) => ({
-        ...entry,
-        timestamp: entry.timestamp.toISOString(),
-      })),
+        const merged = stored ? mergeObserverProgress(local, stored) : local;
+        const focus = local.latestSignalId === savedLocalFocus.current ? stored?.latestSignalId ?? local.latestSignalId : local.latestSignalId;
+        writeObserverSlot(storage, storageKey, slot, { ...merged, latestSignalId: focus });
+        savedLocalFocus.current = local.latestSignalId;
+        if (stored && (merged.discoveredSignalIds !== local.discoveredSignalIds
+          || merged.completedInvestigationActions !== local.completedInvestigationActions
+          || merged.nightWatch !== local.nightWatch || merged.departureDecision !== local.departureDecision || merged.diary !== local.diary)) {
+          queueMicrotask(() => {
+            if (active) syncObserverProgress(stored);
+          });
+        }
+      } catch {
+        queueMicrotask(() => {
+          if (active) setCanPersistObserverMemory(false);
+        });
+      }
     };
 
-    try {
-      window.localStorage.setItem(OBSERVER_STORAGE_KEY, JSON.stringify(payload));
-    } catch {
-      // Local memory is a progressive enhancement; the live observer state should keep running without it.
-    }
-  }, [canPersistObserverMemory, completedInvestigationActions, diary, discoveredSignalIds, latestSignalId]);
+    void withObserverStorageLock(storageKey, save);
+    return () => { active = false; };
+  }, [canPersistObserverMemory, completedInvestigationActions, departureDecision, nightWatch, diary, discoveredSignalIds, latestSignalId,
+    snapshotObserverState, storageKey, syncObserverProgress]);
 
   const toggleTemporalView = useCallback(() => {
-    setIsPastMode(prev => {
-      const next = !prev;
-      if (next) {
-        setWorld(pastWorldData as WorldState);
-        setWeather(pastWorldData.weather as WeatherState);
-        setSelectedDistrictId(archiveDistricts[0].id);
-        addAlert("TEMPORAL SHIFT DETECTED: Accessing Year 01 Archive", "warning");
-        addDiaryEntry("Temporal anomaly triggered. System recalibrating to Foundation Era data.", "secret");
-      } else {
-        setWorld(worldData);
-        setWeather(worldData.weather);
-        setSelectedDistrictId(presentDistricts[0].id);
-        addAlert("TEMPORAL STABILIZED: Returning to Present", "info");
-      }
-      playUISound('click');
-      return next;
-    });
-  }, [addAlert, addDiaryEntry, playUISound]);
+    if (isPastMode) {
+      setSelectedDistrictId(liveDistrictBeforeArchive.current);
+      addAlert("TEMPORAL STABILIZED: Returning to Present", "info");
+    } else {
+      liveDistrictBeforeArchive.current = selectedDistrictId;
+      setSelectedDistrictId(archiveDistricts[0].id);
+      addAlert("TEMPORAL SHIFT DETECTED: Accessing Year 01 Archive", "warning");
+      addDiaryEntry("Temporal anomaly triggered. System recalibrating to Foundation Era data.", "secret");
+    }
+    playUISound('click');
+    setIsPastMode(!isPastMode);
+  }, [addAlert, addDiaryEntry, isPastMode, playUISound, selectedDistrictId]);
 
   // Migration Engine: Randomly shift population and productivity
   useEffect(() => {
+    if (!observing) return;
     const migrationTimer = setInterval(() => {
+      if (document.hidden) return;
+      const sourceIdx = Math.floor(Math.random() * presentDistricts.length);
+      const offset = 1 + Math.floor(Math.random() * (presentDistricts.length - 1));
+      const targetIdx = (sourceIdx + offset) % presentDistricts.length;
+      const migrationRate = 0.01 + Math.random() * 0.02;
+      const productivityShift = (Math.random() - 0.5) * 5;
+
       setDistricts(prev => {
         const nextDistricts = [...prev];
-        const sourceIdx = Math.floor(Math.random() * nextDistricts.length);
-        let targetIdx = Math.floor(Math.random() * nextDistricts.length);
-        while (targetIdx === sourceIdx) {
-          targetIdx = Math.floor(Math.random() * nextDistricts.length);
-        }
-
         const source = { ...nextDistricts[sourceIdx] };
         const target = { ...nextDistricts[targetIdx] };
 
         // Population shift (commute simulation)
-        const popShift = Math.floor(source.population * (0.01 + Math.random() * 0.02));
+        const popShift = Math.floor(source.population * migrationRate);
         source.population -= popShift;
         target.population += popShift;
 
         // Productivity flux
-        const prodShift = (Math.random() - 0.5) * 5;
         source.social_metrics = { 
           ...source.social_metrics, 
-          productivity: Math.max(50, Math.min(100, source.social_metrics.productivity + prodShift))
+          productivity: Math.max(50, Math.min(100, source.social_metrics.productivity + productivityShift))
         };
         target.social_metrics = { 
           ...target.social_metrics, 
-          productivity: Math.max(50, Math.min(100, target.social_metrics.productivity - prodShift))
+          productivity: Math.max(50, Math.min(100, target.social_metrics.productivity - productivityShift))
         };
 
         nextDistricts[sourceIdx] = source;
@@ -734,81 +753,62 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, 30000);
 
     return () => clearInterval(migrationTimer);
-  }, [addDiaryEntry]);
+  }, [addDiaryEntry, observing]);
 
-  // Active Directive Simulation
+  const rotateDirective = useEffectEvent(() => {
+    if (departureDecision) return;
+    const directives = worldData.active_directives;
+    const nextDirective = directives[Math.floor(Math.random() * directives.length)];
+    if (nextDirective === liveDirective) return;
+
+    setLiveDirective(nextDirective);
+    if (isPastMode) return;
+
+    addAlert(`NEW DIRECTIVE ISSUED: ${nextDirective}`, 'info');
+    addDiaryEntry(`Governance Update: High Council issued directive "${nextDirective}".`, 'system');
+  });
+
   useEffect(() => {
+    if (!observing) return;
     const directiveTimer = setInterval(() => {
-      const directives = worldData.active_directives;
-      const nextDirective = directives[Math.floor(Math.random() * directives.length)];
-      
-      setActiveDirective(current => {
-        if (current !== nextDirective) {
-          addAlert(`NEW DIRECTIVE ISSUED: ${nextDirective}`, "info");
-          addDiaryEntry(`Governance Update: High Council issued directive "${nextDirective}".`, "system");
-        }
-        return nextDirective;
-      });
+      if (!document.hidden) rotateDirective();
     }, 45000);
-
     return () => clearInterval(directiveTimer);
-  }, [addAlert, addDiaryEntry]);
+  }, [observing]);
 
-  // Ecology Engine: Weather-Energy-Economy Dynamics
+  const updateLiveEconomy = useEffectEvent(() => {
+    const isStorm = /storm|pressure waves/i.test(liveVentWeather.current_condition);
+    const energy = liveWorld.global_stats.energy_index;
+    const energyChange = isStorm ? -Math.random() * 2 : energy < 98.5 ? Math.random() * 0.5 : 0;
+    const nextEnergy = Number(Math.max(70, Math.min(100, energy + energyChange)).toFixed(1));
+    const tradeVolumeChange = Math.random() * (isStorm ? -50000 : 20000);
+    const nextVolume = Math.floor(Math.max(500000, Math.min(2000000, liveWorld.economy.trade_volume + tradeVolumeChange)));
+
+    setLiveWorld({
+      ...liveWorld,
+      global_stats: { ...liveWorld.global_stats, energy_index: nextEnergy },
+      economy: {
+        ...liveWorld.economy,
+        market_trend: isStorm ? 'Bearish' : Math.random() > 0.5 ? 'Bullish' : 'Stable',
+        trade_volume: nextVolume,
+      },
+    });
+
+    if (!isPastMode && nextEnergy < 85 && energy >= 85) {
+      addAlert('CRITICAL ENERGY DROP: Gravity Cores under-performing', 'critical');
+      addDiaryEntry('Critical System Failure: Energy levels dropped below safety threshold.', 'system');
+    }
+  });
+
   useEffect(() => {
+    if (!observing) return;
     const ecologyTimer = setInterval(() => {
-      setWorld(prev => {
-        const isStorm = weather.current_condition.toLowerCase().includes('storm') || 
-                        weather.current_condition.toLowerCase().includes('ion');
-        
-        let energyChange = 0;
-        let economyTrend: string;
-        let tradeVolumeChange: number;
-
-        if (isStorm) {
-          // Storms drain energy and crash markets
-          energyChange = -(Math.random() * 2);
-          economyTrend = 'Bearish';
-          tradeVolumeChange = -(Math.random() * 50000);
-        } else {
-          // Normal weather allows slow recovery and steady markets
-          if (prev.global_stats.energy_index < 98.5) {
-            energyChange = Math.random() * 0.5;
-          }
-          economyTrend = Math.random() > 0.5 ? 'Bullish' : 'Stable';
-          tradeVolumeChange = Math.random() * 20000;
-        }
-
-        const nextEnergy = Math.max(70, Math.min(100, prev.global_stats.energy_index + energyChange));
-        const nextVolume = Math.max(500000, Math.min(2000000, (prev.economy?.trade_volume || 1250000) + tradeVolumeChange));
-        
-        // Critical alerts
-        if (nextEnergy < 85 && prev.global_stats.energy_index >= 85) {
-          addAlert("CRITICAL ENERGY DROP: Gravity Cores under-performing", "critical");
-          addDiaryEntry("Critical System Failure: Energy levels dropped below safety threshold.", "system");
-        }
-
-        return {
-          ...prev,
-          global_stats: {
-            ...prev.global_stats,
-            energy_index: Number(nextEnergy.toFixed(1))
-          },
-          economy: {
-            ...prev.economy,
-            currency: 'Aether-Credits',
-            market_trend: economyTrend,
-            trade_volume: Math.floor(nextVolume)
-          }
-        };
-      });
+      if (!document.hidden) updateLiveEconomy();
     }, 5000);
-
     return () => clearInterval(ecologyTimer);
-  }, [weather, addAlert, addDiaryEntry]);
+  }, [observing]);
 
-  // Random event simulator
-  useEffect(() => {
+  const simulateWeather = useEffectEvent(() => {
     const events: Array<{ condition: string; type: AlertType; weather: string }> = [
       { condition: "Ion Storm Incoming", type: "warning", weather: "Heavy Ion Storm" },
       { condition: "Traffic Congestion", type: "info", weather: "Clear Sky with Ion Clouds" },
@@ -816,28 +816,28 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       { condition: "Clear Skies", type: "info", weather: "Perfectly Clear" }
     ];
 
-    const interval = setInterval(() => {
-      if (Math.random() > 0.8) {
-        const event = events[Math.floor(Math.random() * events.length)];
-        addAlert(event.condition, event.type);
-        
-        // Update actual weather state
-        if (event.weather) {
-          setWeather(prev => ({ ...prev, current_condition: event.weather }));
-        }
-        
-        if (event.type === 'critical' || event.type === 'warning') {
-          addDiaryEntry(`Weather Shift: ${event.weather}. Observer warned of atmospheric volatility.`, 'system');
-        }
-      }
-    }, 20000);
+    if (Math.random() <= 0.8) return;
 
+    const event = events[Math.floor(Math.random() * events.length)];
+    setLiveWeather(prev => ({ ...prev, current_condition: event.weather }));
+    if (isPastMode) return;
+
+    addAlert(event.condition, event.type);
+    if (event.type === 'critical' || event.type === 'warning') {
+      addDiaryEntry(`Weather Shift: ${event.weather}. Observer warned of atmospheric volatility.`, 'system');
+    }
+  });
+
+  useEffect(() => {
+    if (!observing) return;
+    const interval = setInterval(() => {
+      if (!document.hidden) simulateWeather();
+    }, 20000);
     return () => clearInterval(interval);
-  }, [addAlert, addDiaryEntry]);
+  }, [observing]);
 
   return (
     <CityContext.Provider value={{ 
-      currentTime, 
       selectedDistrict, 
       districts,
       currentDistricts,
@@ -845,8 +845,8 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       weather, 
       alerts, 
       diary,
-      isDay,
       setDistrict,
+      visitLiveDistrict,
       playUISound,
       lastSoundTrigger,
       addAlert,
@@ -857,11 +857,19 @@ export const CityProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       signalIntel,
       signalTelemetry,
       observerMemory,
+      nightWatch,
+      recordWatch,
+      exportObserverBackup,
+      restoreObserverBackup,
       investigationState,
       terminalCommandRequest,
       diaryReviewRequest,
       focusSignal,
       completeInvestigationAction,
+      captureInstrumentRecord,
+      submitCaseFinding,
+      departureDecision,
+      fileDepartureDecision,
       requestTerminalAction,
       requestDiaryReview,
       registerSignalDiscovery,

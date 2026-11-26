@@ -1,173 +1,37 @@
-<div align="center">
+# 云深处 / The Deep Cloud
 
-# ☁️ 云深处 / The Deep Cloud
+一座浮空城，三片高度不同的街区。下环栈桥听见了航道图上没有的回声。你是当班观察者，得弄清云层底下究竟有什么，再决定零号月台的末班车能不能出发。
 
-**A cinematic observer console for a floating city above the clouds.**  
-一座漂浮在云层之上的城市，一组被隐藏的异常频段，一套属于观察者的调查协议。
+*A science-fiction investigation game in Chinese. Follow five linked cases through a floating city, then take the night shift for its residents.*
 
-[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=111111)](#技术栈--tech-stack)
-[![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)](#技术栈--tech-stack)
-[![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)](#技术栈--tech-stack)
-[![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-Live-222222?logo=github&logoColor=white)](https://lunora-gather.github.io/YunShenChu/)
+**[在线游玩](https://lunora-gather.github.io/YunShenChu/)** · [直接进入值夜巡查](https://lunora-gather.github.io/YunShenChu/#watch) · [下载离线版 ZIP](https://lunora-gather.github.io/YunShenChu/downloads/The-Deep-Cloud.zip)
 
-[在线体验 / Play Live](https://lunora-gather.github.io/YunShenChu/) · [Lunora Gather](https://github.com/Lunora-Gather)
+## 第一次当班
 
-</div>
+1. 在标题画面点「开始调查」，前往下环。可以点画面里的「沿栈桥往下」走近现场，也可以用现场下方的「追踪云下回波」打开接收器。
+2. 锁定信号后，按现场提示使用仪器。卡住时，底栏会标出当前续办的案名和下一步，仪器也有可展开的提示。
+3. 每案有三份记录。提交结论时，从两份不同来源的记录中各引用一项证据。五案归档后，再从每案选出一条记录复原发车清单，作出最后的调度决定。
 
----
+## 五案之后，城里还有人值夜
 
-## ✦ 项目概览 / Overview
+「值夜巡查」从第一晚就可以单独玩。一班接一通来电，去三环里的两站取样。依据读数调度正确，剩下的一站就有人手修缮。加查第三站能多一份把握，也会用完这班的人手。
 
-**云深处 / The Deep Cloud** 是一个以“空中城市观察台”为核心概念的交互式叙事前端项目。玩家不是传统意义上的角色，而是接入城市系统的 **Observer**：在启动序列之后进入控制台，观察漂浮城市的各个城区，扫描隐藏频段，锁定异常信号，并沿着系统给出的 **Next Action** 推进调查。
+九项街区设施逐步修好，夜邮换签、电台点播也会加入轮值。每四班可以约定下一轮的值守目标。交班簿保留最近十二班的原始读数和处置结果，随时可以翻回去看当时的判断。
 
-项目的体验重点不是单一关卡通关，而是把 **城市监控、异常信号、档案调查、终端命令、居民动态与视觉氛围** 组合成一个完整的观察者界面。
+五案归档后，三个街区的居民各有三封连续来信。一趟委托跨两班，先看承重选承运人，再按路线接车或核验封缄。熟悉的街坊可以帮忙代抄读数，跑熟的路线还会带来回程货。收到的签收回信可以在街区修缮簿里重读。
 
-> Open the city console, listen beneath the cloudline, and follow every anomaly until the archive answers back.
+![值夜巡查实机画面，左侧为候车长廊，右侧将三环读数并排显示供调度](docs/images/night-watch.jpg)
 
----
+## 续玩与换设备
 
-## ✦ 在线入口 / Live Demo
+进度随当前浏览器和网址自动保存，中途离开也能接着办案或交班。想体验另一种结局，可以从标题画面打开独立重玩档。
 
-```text
-https://lunora-gather.github.io/YunShenChu/
-```
+换浏览器、换设备，或从网页版转到离线版时，先从「管理存档」下载备份，再在目标位置选择备份、核对预览并合并进度。合并会保留目标存档已有的结局。
 
-如果 GitHub Pages 刚完成部署但页面还没刷新，可以尝试强制刷新浏览器缓存。
+macOS 上解压离线包后，双击「打开云深处.command」。启动器使用 Python 3 在本机打开 Safari，游玩时保留启动窗口。
 
-| 系统 | 快捷键 |
-| --- | --- |
-| Windows / Linux | `Ctrl + F5` |
-| macOS | `Command + Shift + R` |
+## 开发与世界观
 
----
+游戏使用 React、TypeScript 和 Vite。运行、测试、制作离线包及发布步骤见[开发说明](SkyCity/README.md)。想了解城里的街区与派系，可从[云深处编年史](docs/history.md)和[城市治理](docs/governance.md)读起。
 
-## ✦ 核心体验 / Experience Highlights
-
-| 模块 | 说明 |
-| --- | --- |
-| **Boot Sequence** | 启动序列营造进入观察者协议的仪式感。 |
-| **Observer Console** | 主控制台聚合城市状态、城区切换、信号压力、时间与全局指标。 |
-| **3D City Window** | 以可视化城市窗口展示漂浮城市、交通与环境层。 |
-| **District Rail** | 在不同城区之间切换，观察高度、人口、安防、地标和社会指标。 |
-| **Signal Interceptor** | 扫描隐藏频段，发现异常信号并写入观察者记忆。 |
-| **Archive Investigation** | 对已发现或封存的异常线程进行筛选、搜索和调查推进。 |
-| **Deep Terminal** | 通过终端动作执行追踪、记忆审计等调查步骤。 |
-| **Camera / Diary / Pulse** | 结合安全摄像头、观察者日记和居民动态补充证据链。 |
-| **Temporal Toggle** | 切换实时城市与 Foundation Archive 的时间层。 |
-| **Atmospheric Systems** | 星场、粒子、天气、数据流、故障叠层和音频反馈共同塑造氛围。 |
-
----
-
-## ✦ 玩法线索 / How It Plays
-
-1. 进入页面后等待启动序列完成。
-2. 在城市窗口中选择不同城区，查看当前区域的状态与地标。
-3. 点击 **Start / Signals** 打开信号拦截器，扫描隐藏频段。
-4. 锁定异常信号后，根据 **Next Action** 执行下一步调查。
-5. 在 **Systems / Archive / Pulse** 等面板中交叉验证线索。
-6. 使用终端、摄像头和观察者日记推进异常线程。
-
----
-
-## ✦ 技术栈 / Tech Stack
-
-| 分类 | 技术 |
-| --- | --- |
-| Frontend | React 19 |
-| Language | TypeScript |
-| Build Tool | Vite |
-| Icons | Lucide React |
-| Styling | CSS Modules / Vanilla CSS |
-| Deploy | GitHub Pages |
-
----
-
-## ✦ 本地运行 / Local Development
-
-```bash
-git clone https://github.com/Lunora-Gather/YunShenChu.git
-cd YunShenChu/SkyCity
-npm ci
-npm run dev
-```
-
-常用脚本：
-
-```bash
-npm run dev      # 启动本地开发服务器
-npm run lint     # 运行 ESLint 检查
-npm run build    # TypeScript 与 Vite 生产构建
-npm run preview  # 本地预览生产构建
-```
-
-构建产物会输出到：
-
-```text
-SkyCity/dist/
-```
-
-项目已在 Vite 中配置相对资源路径，适合 GitHub Pages 子路径部署。
-
----
-
-## ✦ 项目结构 / Project Structure
-
-```text
-.
-├── README.md
-└── SkyCity/
-    ├── index.html
-    ├── package.json
-    ├── vite.config.ts
-    └── src/
-        ├── App.tsx
-        ├── App.css
-        ├── components/
-        │   ├── AudioEngine/
-        │   ├── BootSequence/
-        │   ├── Chronicle/
-        │   ├── CitizenFeed/
-        │   ├── DataStream/
-        │   ├── DeepTerminal/
-        │   ├── EconomyDashboard/
-        │   ├── Map3D/
-        │   ├── SecurityCamera/
-        │   ├── SignalInterceptor/
-        │   └── ...
-        ├── context/
-        └── data/
-            └── signals.ts
-```
-
----
-
-## ✦ 设计关键词 / Design Language
-
-- **Cloud City / 空中城市**：漂浮城区、云层边界、城市高度与交通层。
-- **Observer Protocol / 观察者协议**：玩家通过控制台理解城市，而不是直接扮演城市居民。
-- **Signal Mystery / 频段谜题**：异常不是直接出现，而是通过频率、档案、证据和行动逐步显影。
-- **Cinematic Interface / 电影化界面**：星场、扫描线、数据流、故障层和终端感构成整体视觉气质。
-
----
-
-## ✦ 部署 / Deployment
-
-仓库可通过 GitHub Pages 发布。生产构建命令：
-
-```bash
-cd SkyCity
-npm ci
-npm run build
-```
-
-发布目录：
-
-```text
-SkyCity/dist
-```
-
----
-
-## ✦ License
-
-当前仓库暂未声明许可证。如需开放复用、课程展示或二次分发，建议后续补充明确的开源许可证。
+仓库目前未声明许可证。

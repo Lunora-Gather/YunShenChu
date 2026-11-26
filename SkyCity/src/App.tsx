@@ -1,20 +1,25 @@
-import { useEffect, useMemo, useState } from 'react';
+import { revealPinnedTabs } from './components/revealPinnedTabs';
+import { useEffect, useEffectEvent, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import type { KeyboardEvent } from 'react';
 import {
   Activity,
-  AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
   AudioLines,
   BookOpen,
   Camera,
   CheckCircle,
   Cloud,
-  Compass,
+  Command,
   Database,
   Eye,
   Gauge,
   History,
+  Layers3,
   Landmark,
-  MapPin,
+  LockKeyhole,
   MessageSquare,
+  Moon,
   Radio,
   Route,
   Search,
@@ -25,19 +30,31 @@ import {
   Zap,
 } from 'lucide-react';
 import './App.css';
-import { useCity } from './context/CityContext';
+import './FieldConsole.css';
+import { streetReply, watchSites, watchResume } from './data/nightWatch';
+import { caseNames, fieldSites, fieldLeads } from './data/fieldSites';
+import { CityProvider, useCity } from './context/CityContext';
+import { REPLAY_STORAGE_KEY } from './context/observerStorage';
 import { SIGNAL_CATALOG } from './data/signals';
+import NightWatch from './components/NightWatch/NightWatch';
 import AudioEngine from './components/AudioEngine/AudioEngine';
-import BootSequence from './components/BootSequence/BootSequence';
+import ScenePhoto from './components/ScenePhoto/ScenePhoto';
+import TitleScreen from './components/TitleScreen/TitleScreen';
+import CaseDesk, { DepartureFile } from './components/CaseDesk/CaseDesk';
+import InstrumentWorkbench from './components/CaseDesk/InstrumentWorkbench';
+import { getInstrument } from './data/instruments';
+import { getCaseFile } from './data/caseFiles';
+import CommandPalette from './components/CommandPalette/CommandPalette';
+import type { ConsoleCommand } from './components/CommandPalette/CommandPalette';
 import Chronicle from './components/Chronicle/Chronicle';
 import CitizenFeed from './components/CitizenFeed/CitizenFeed';
-import DataStream from './components/DataStream/DataStream';
 import DeepTerminal from './components/DeepTerminal/DeepTerminal';
 import EconomyDashboard from './components/EconomyDashboard/EconomyDashboard';
 import GlitchOverlay from './components/GlitchOverlay/GlitchOverlay';
 import Map3D from './components/Map3D/Map3D';
 import ObserverDiary from './components/ObserverDiary/ObserverDiary';
 import Particles from './components/Particles/Particles';
+import SaveDesk from './components/SaveDesk/SaveDesk';
 import SecurityCamera from './components/SecurityCamera/SecurityCamera';
 import SignalInterceptor from './components/SignalInterceptor/SignalInterceptor';
 import Starfield from './components/Starfield/Starfield';
@@ -48,21 +65,51 @@ import WeatherOverlay from './components/WeatherOverlay/WeatherOverlay';
 
 type InspectorPanel = 'district' | 'systems' | 'archive' | 'citizens';
 type ArchiveFilter = 'all' | 'unlocked' | 'sealed';
+type ConsoleOverlay =
+  | { type: 'signals'; opener: HTMLElement | null; targetId?: string; fieldVisit?: boolean }
+  | { type: 'case'; opener: HTMLElement | null; signalId: string }
+  | { type: 'capture'; opener: HTMLElement | null; signalId: string; actionId: string; practice?: boolean; returnToCase?: boolean }
+  | { type: 'camera' | 'palette' | 'departure' | 'save'; opener: HTMLElement | null };
+type ConsoleDrawer = 'terminal' | 'diary';
 
 const panelOptions: Array<{ id: InspectorPanel; label: string; icon: typeof Eye }> = [
-  { id: 'district', label: 'District', icon: Eye },
-  { id: 'systems', label: 'Systems', icon: Gauge },
-  { id: 'archive', label: 'Archive', icon: BookOpen },
-  { id: 'citizens', label: 'Pulse', icon: MessageSquare },
+  { id: 'district', label: '现场', icon: Eye },
+  { id: 'systems', label: '系统', icon: Gauge },
+  { id: 'archive', label: '档案', icon: BookOpen },
+  { id: 'citizens', label: '居民', icon: MessageSquare },
 ];
 
 const archiveFilterOptions: Array<{ id: ArchiveFilter; label: string }> = [
-  { id: 'all', label: 'All' },
-  { id: 'unlocked', label: 'Unlocked' },
-  { id: 'sealed', label: 'Sealed' },
+  { id: 'all', label: '全部' },
+  { id: 'unlocked', label: '已锁定' },
+  { id: 'sealed', label: '待锁定' },
 ];
 
+const stageLabels = { sealed: '待锁定', detected: '已锁定', corroborated: '取证中', contained: '已归档' };
+
+const pressureLabels = { quiet: '平稳', watch: '留意', unstable: '不稳', breach: '干扰' };
+const weatherLabels: Record<string, string> = {
+  'Clear Sky with Ion Clouds': '晴，有离子云', 'Heavy Ion Storm': '强离子风暴',
+  'Static Cloud Cover': '静电云层', 'Perfectly Clear': '晴朗', 'Under-cloud Pressure Waves': '云下压力波',
+  'Heavy Fog & Industrial Smoke': '浓雾与工业烟尘',
+};
+
 const formatPopulation = (value: number) => value.toLocaleString('en-US');
+const getIsDay = () => {
+  const hour = new Date().getHours();
+  return hour >= 6 && hour < 18;
+};
+
+function ConsoleClock() {
+  const [time, setTime] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return <strong>{time.toLocaleTimeString([], { hour12: false })}</strong>;
+}
 
 const getStatusClass = (status: string) => {
   const normalized = status.toLowerCase();
@@ -72,31 +119,83 @@ const getStatusClass = (status: string) => {
   return 'status-active';
 };
 
-const getDistrictInsight = (id: string) => {
-  if (id === 'apex') return 'Transparent civic skin, sealed archive arteries, and command traffic rising above the cloudline.';
-  if (id === 'mid_ring') return 'Warm commerce strata, dense pedestrian bridges, and the loudest civilian signal layer.';
-  if (id === 'foundation') return 'Exposed engines, condensation towers, and the first place every anomaly becomes physical.';
-  return 'Foundation archive: fragile scaffolds, manual routes, and a city still learning how to stay airborne.';
-};
+type Screen = 'title' | 'field' | 'watch';
 
-function App() {
-  const [bootComplete, setBootComplete] = useState(false);
-  const [isInterceptorOpen, setIsInterceptorOpen] = useState(false);
-  const [isCameraOpen, setIsCameraOpen] = useState(false);
-  const [activePanel, setActivePanel] = useState<InspectorPanel>('district');
+function currentScreen(): Screen {
+  if (window.location.hash === '#watch') return 'watch';
+  if (window.location.hash === '#field' || new URLSearchParams(window.location.search).get('view') === 'field') return 'field';
+  return 'title';
+}
+
+function fieldViewKey() {
+  return new URLSearchParams(window.location.search).has('replay') ? 'yunshenchu.replay.view' : 'yunshenchu.original.view';
+}
+
+function savedFieldView() {
+  if (currentScreen() !== 'field') return;
+  let view;
+  try {
+    view = JSON.parse(window.sessionStorage.getItem(fieldViewKey()) ?? 'null');
+  } catch { return; }
+  if (!view || typeof view.district !== 'string' || !Object.hasOwn(fieldSites, view.district)) return;
+  const panel = panelOptions.find(option => option.id === view.panel)?.id ?? 'district';
+  return { district: view.district as string, near: view.near === true, map: view.map === true, panel };
+}
+
+function subscribeRoute(notify: () => void) {
+  window.addEventListener('hashchange', notify);
+  window.addEventListener('popstate', notify);
+  window.addEventListener('screenchange', notify);
+  return () => {
+    window.removeEventListener('hashchange', notify);
+    window.removeEventListener('popstate', notify);
+    window.removeEventListener('screenchange', notify);
+  };
+}
+
+function navigateTo(screen: Screen) {
+  if (currentScreen() === screen) return;
+  const destination = new URL(window.location.href);
+  destination.searchParams.delete('view');
+  destination.hash = screen === 'title' ? '' : screen;
+  try {
+    window.history.pushState(null, '', destination);
+  } catch {
+    window.location.assign(destination.href);
+    return;
+  }
+  window.dispatchEvent(new Event('screenchange'));
+}
+
+function ObserverConsole({ replay, screen }: { replay: boolean; screen: Screen }) {
+  const entered = screen === 'field';
+  const watching = screen === 'watch';
+  const watchLink = useRef<HTMLAnchorElement>(null);
+  const [mapView, setMapView] = useState(() => savedFieldView()?.map ?? false);
+  const [nearbyDistrict, setNearbyDistrict] = useState<string | null>(() => {
+    const view = savedFieldView();
+    return view?.near ? view.district : null;
+  });
+  const entryFocus = useRef(false);
+  const [overlay, setOverlay] = useState<ConsoleOverlay | null>(null);
+  const [activeDrawer, setActiveDrawer] = useState<ConsoleDrawer | null>(null);
+  const [isDay, setIsDay] = useState(getIsDay);
+  const [activePanel, setActivePanel] = useState<InspectorPanel>(() => savedFieldView()?.panel ?? 'district');
   const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>('all');
+  const archiveInput = useRef<HTMLInputElement>(null);
   const [archiveQuery, setArchiveQuery] = useState('');
   const {
     activeDirective,
+    nightWatch,
     addDiaryEntry,
     currentDistricts,
-    currentTime,
     discoveredSignalIds,
+    districts,
     entities,
     focusSignal,
     completeInvestigationAction,
+    departureDecision,
     investigationState,
-    isDay,
     isPastMode,
     latestSignal,
     observerMemory,
@@ -104,7 +203,8 @@ function App() {
     requestDiaryReview,
     requestTerminalAction,
     selectedDistrict,
-    setDistrict,
+    visitLiveDistrict,
+    toggleTemporalView,
     signalIntel,
     signalTelemetry,
     weather,
@@ -112,14 +212,55 @@ function App() {
   } = useCity();
 
   const altitudeRange = selectedDistrict.altitude_range.join(' - ');
-  const clockLabel = currentTime.toLocaleTimeString([], { hour12: false });
-  const anomalyState = useMemo(() => {
-    const weatherRisk = weather.current_condition.toLowerCase().includes('storm') || weather.current_condition.toLowerCase().includes('ion');
-    if (signalTelemetry.level === 'breach') return 'BREACH';
-    if (world.global_stats.energy_index < 85 || weatherRisk || signalTelemetry.level === 'unstable') return 'ELEVATED';
-    return isPastMode ? 'ARCHIVE' : 'STABLE';
-  }, [isPastMode, signalTelemetry.level, weather.current_condition, world.global_stats.energy_index]);
 
+  useEffect(() => {
+    const timer = setInterval(() => setIsDay(getIsDay()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!entered || watching) return;
+
+    const handleShortcut = (event: globalThis.KeyboardEvent) => {
+      if (event.key.toLowerCase() !== 'k' || !(event.metaKey || event.ctrlKey) || event.altKey || event.isComposing) return;
+      if (overlay && overlay.type !== 'palette') return;
+
+      event.preventDefault();
+      setOverlay(overlay ? null : { type: 'palette', opener: document.activeElement instanceof HTMLElement ? document.activeElement : null });
+    };
+    window.addEventListener('keydown', handleShortcut);
+    return () => window.removeEventListener('keydown', handleShortcut);
+  }, [entered, overlay, watching]);
+
+  useEffect(() => {
+    if (!entryFocus.current || watching) return;
+    entryFocus.current = false;
+    document.querySelector<HTMLElement>(entered ? '.observer-console' : '.title-play')?.focus({ preventScroll: true });
+  }, [entered, watching]);
+  const restoreView = useEffectEvent(() => {
+    entryFocus.current = true;
+    setOverlay(null);
+    setActiveDrawer(null);
+    const view = savedFieldView();
+    if (!view) return;
+    visitLiveDistrict(view.district);
+    setNearbyDistrict(view.near ? view.district : null);
+    setMapView(view.map);
+    setActivePanel(view.panel);
+  });
+  useEffect(() => {
+    const restore = () => restoreView();
+    window.addEventListener('popstate', restore);
+    return () => window.removeEventListener('popstate', restore);
+  }, []);
+
+  useEffect(() => {
+    if (!entered || isPastMode || currentScreen() !== 'field') return;
+    const fieldView = { district: selectedDistrict.id, near: nearbyDistrict === selectedDistrict.id, map: mapView, panel: activePanel };
+    try {
+      window.sessionStorage.setItem(fieldViewKey(), JSON.stringify(fieldView));
+    } catch { /* Exploring the field also works when the browser disables session storage. */ }
+  }, [entered, isPastMode, selectedDistrict.id, nearbyDistrict, mapView, activePanel]);
   const socialMetrics = useMemo(() => {
     return Object.entries(selectedDistrict.social_metrics).map(([key, value]) => ({
       key,
@@ -130,11 +271,11 @@ function App() {
 
   const discoveredSignalSet = useMemo(() => new Set(discoveredSignalIds), [discoveredSignalIds]);
   const hasSignalMemory = signalIntel.length > 0;
-  const scanActionLabel = hasSignalMemory ? 'Scan hidden frequencies' : 'Start signal sweep';
-  const discoveryProgress = Math.round((discoveredSignalIds.length / SIGNAL_CATALOG.length) * 100);
-  const localSignalCount = signalTelemetry.districtSignalCounts[selectedDistrict.id] ?? 0;
+  const scanActionLabel = discoveredSignalIds.length === SIGNAL_CATALOG.length ? '查看已锁定信号' : '全城扫频';
+  const localSignalCount = isPastMode ? 0 : signalTelemetry.districtSignalCounts[selectedDistrict.id] ?? 0;
   const filteredArchiveSignals = useMemo(() => {
     const query = archiveQuery.trim().toLowerCase();
+    const districtNames = new Map(districts.map((district) => [district.id, district.name]));
 
     return SIGNAL_CATALOG.filter((signal) => {
       const isUnlocked = discoveredSignalSet.has(signal.id);
@@ -144,45 +285,79 @@ function App() {
     }).filter((signal) => {
       if (!query) return true;
 
-      const searchableText = [
+      const identity = [
         signal.id,
         signal.title,
+        caseNames[signal.id],
         signal.origin,
         signal.lead,
-        signal.evidence,
-        signal.impact,
-        signal.containment,
-        signal.districtId ?? '',
+        signal.districtId,
+        signal.districtId?.replaceAll('_', ' '),
+        signal.districtId && districtNames.get(signal.districtId),
+      ];
+      const unlockedDetails = discoveredSignalSet.has(signal.id) ? [
+        signal.evidence, signal.impact, signal.containment,
         ...signal.investigation.actions.flatMap((action) => [action.id, action.label, action.description]),
-      ].join(' ').toLowerCase();
+      ] : [];
 
-      return searchableText.includes(query);
+      return [...identity, ...unlockedDetails].join(' ').toLowerCase().includes(query);
     });
-  }, [archiveFilter, archiveQuery, discoveredSignalSet]);
+  }, [archiveFilter, archiveQuery, discoveredSignalSet, districts]);
   const latestInvestigationThread = investigationState.latestThread;
   const nextInvestigationAction = investigationState.nextAction;
+  const guidedSignal = nextInvestigationAction?.signal;
+  const guidedRegion = watchSites.find(site => site.id === guidedSignal?.districtId)?.ring ?? '观察台';
+  const guidedCase = guidedSignal ? guidedRegion + ' · ' + caseNames[guidedSignal.id] : '';
+  const guidedAction = nextInvestigationAction?.action.label ?? '';
+  const nextThread = nextInvestigationAction ? investigationState.threads[nextInvestigationAction.signal.id] : latestInvestigationThread;
+  const filedCount = SIGNAL_CATALOG.filter(({ id }) => investigationState.threads[id]?.stage === 'contained').length;
+  const hasFinalDispatch = filedCount === SIGNAL_CATALOG.length;
+  const showMap = mapView || isPastMode || activeDrawer === 'terminal';
+  const fieldLog = useMemo(() => SIGNAL_CATALOG.flatMap((signal) =>
+    (getCaseFile(signal.id)?.records ?? [])
+      .filter(({ actionId }) => investigationState.completedActionIds[signal.id]?.includes(actionId))
+      .map((record) => ({ record, signal })))
+    .sort((a, b) => a.record.time.localeCompare(b.record.time)), [investigationState.completedActionIds]);
 
-  const openInterceptor = () => {
-    setIsInterceptorOpen(true);
+  const openInterceptor = (opener: HTMLElement | null) => {
+    setOverlay({ type: 'signals', opener });
     playUISound('click');
     addDiaryEntry('Observer opened the encrypted signal interceptor.', 'system', selectedDistrict.name);
   };
 
-  const openCamera = () => {
-    setIsCameraOpen(true);
+  const openCamera = (opener: HTMLElement | null) => {
+    setOverlay({ type: 'camera', opener });
     playUISound('click');
     addDiaryEntry('Synthetic security camera feed requested.', 'visit', selectedDistrict.name);
-
-    if (latestSignal) {
-      const thread = investigationState.threads[latestSignal.id];
-      const cameraAction = latestSignal.investigation.actions.find((action) => action.type === 'camera');
-      if (thread && cameraAction && !thread.completedActionIds.includes(cameraAction.id)) {
-        completeInvestigationAction(latestSignal.id, cameraAction.id);
-      }
-    }
   };
 
-  const markDiscovery = (id: string, title: string) => {
+  const closeOverlay = () => {
+    setOverlay(null);
+    playUISound('click');
+  };
+
+  const openSaveDesk = (opener: HTMLElement) => {
+    setOverlay({ type: 'save', opener });
+  };
+
+  const returnToTitle = () => {
+    setNearbyDistrict(null);
+    setOverlay(null);
+    setActiveDrawer(null);
+    entryFocus.current = true;
+    navigateTo('title');
+  };
+
+  const openCase = (id: string, opener: HTMLElement) => {
+    if (!discoveredSignalSet.has(id)) {
+      setOverlay({ type: 'signals', targetId: id, opener });
+    } else {
+      setOverlay({ type: 'case', signalId: id, opener });
+    }
+    playUISound('click');
+  };
+
+  const markDiscovery = (id: string, title: string, opener: HTMLElement) => {
     if (discoveredSignalSet.has(id)) {
       focusSignal(id);
       addDiaryEntry(`Anomaly thread focused: ${title}.`, 'secret', selectedDistrict.name);
@@ -191,13 +366,70 @@ function App() {
 
     addDiaryEntry(`Observer reviewed a locked anomaly stub: ${title}. Signal evidence still required.`, 'system', selectedDistrict.name);
     playUISound('beep');
-    setIsInterceptorOpen(true);
+    setOverlay({ type: 'signals', opener, targetId: id });
   };
 
-  const runInvestigationAction = (signalId: string, actionId: string) => {
+  const showEvidencePanel = (panel: InspectorPanel) => {
+    setActivePanel(panel);
+    requestAnimationFrame(() => {
+      const tab = document.getElementById(`inspector-tab-${panel}`);
+      tab?.focus({ preventScroll: true });
+      tab?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    });
+  };
+
+  const runConsoleCommand = (command: ConsoleCommand) => {
+    const opener = overlay?.opener ?? document.getElementById('command-palette-trigger');
+    if (command === 'signals') {
+      openInterceptor(opener);
+      return;
+    }
+    if (command === 'camera') {
+      openCamera(opener);
+      return;
+    }
+    closeOverlay();
+    if (command === 'archive') {
+      setActivePanel('archive');
+      requestAnimationFrame(() => document.getElementById('inspector-tab-archive')?.focus());
+      return;
+    }
+    setActiveDrawer(command);
+  };
+
+  const handlePanelKeys = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    let nextIndex: number;
+    switch (event.key) {
+      case 'ArrowLeft': nextIndex = (index + panelOptions.length - 1) % panelOptions.length; break;
+      case 'ArrowRight': nextIndex = (index + 1) % panelOptions.length; break;
+      case 'Home': nextIndex = 0; break;
+      case 'End': nextIndex = panelOptions.length - 1; break;
+      default: return;
+    }
+    event.preventDefault();
+    const nextPanel = panelOptions[nextIndex].id;
+    document.getElementById(`inspector-tab-${nextPanel}`)?.focus();
+    revealPinnedTabs(event.currentTarget);
+    setActivePanel(nextPanel);
+  };
+
+  const runInvestigationAction = (signalId: string, actionId: string, opener: HTMLElement | null) => {
     const signal = SIGNAL_CATALOG.find((item) => item.id === signalId);
     const action = signal?.investigation.actions.find((item) => item.id === actionId);
     if (!signal || !action) return;
+
+    if (getInstrument(signal.id, action.id)) {
+      focusSignal(signal.id);
+      if (action.type === 'camera' && signal.districtId) visitLiveDistrict(signal.districtId);
+      setOverlay({ type: 'capture', signalId, actionId, opener });
+      return;
+    }
+
+    if (action.type === 'report') {
+      setOverlay({ type: 'case', signalId, opener });
+      playUISound('click');
+      return;
+    }
 
     if (action.type === 'terminal') {
       requestTerminalAction(signal.id, action.id);
@@ -209,215 +441,291 @@ function App() {
       return;
     }
 
-    focusSignal(signal.id);
-
     if (action.type === 'district' && action.districtId) {
-      setDistrict(action.districtId);
+      visitLiveDistrict(action.districtId);
+      setActivePanel('district');
     }
 
     if (action.type === 'camera') {
-      setIsCameraOpen(true);
+      if (signal.districtId) visitLiveDistrict(signal.districtId);
+      setOverlay({ type: 'camera', opener });
     }
 
     if (action.type === 'citizens') {
-      setActivePanel('citizens');
+      focusSignal(signal.id);
+      showEvidencePanel('citizens');
+      return;
     }
 
     if (action.type === 'archive') {
-      setActivePanel(action.id === 'review-systems' ? 'systems' : 'archive');
+      showEvidencePanel(action.id === 'review-systems' ? 'systems' : 'archive');
     }
 
     completeInvestigationAction(signal.id, action.id);
   };
 
-  useEffect(() => {
-    if (!isCameraOpen && !isInterceptorOpen) return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      setIsCameraOpen(false);
-      setIsInterceptorOpen(false);
+  const site = fieldSites[selectedDistrict.id];
+  const patrolIndex = watchSites.findIndex(s => s.id === selectedDistrict.id);
+  const completedWorks = nightWatch?.works[patrolIndex] ?? 0;
+  const nearby = !showMap && nearbyDistrict === selectedDistrict.id;
+  const shownPhoto = nearby ? site.nearby : site;
+  const fieldByDistrict = currentDistricts.map(district => {
+    const threads = SIGNAL_CATALOG.filter(signal => signal.districtId === district.id)
+      .map(signal => investigationState.threads[signal.id]);
+    const lead = threads.find(thread => thread.nextAction && thread.signal.id === latestSignal?.id)
+      ?? threads.find(thread => thread.nextAction)
+      ?? threads.find(thread => thread.stage === 'sealed')
+      ?? threads[0];
+    const sign = lead.nextAction?.type === 'report' ? '可交结论'
+      : lead.stage === 'contained' ? '本环已结案' : lead.stage === 'sealed' ? fieldLeads[lead.signal.id].sign
+      : lead.stage === 'detected' ? '信号已锁定'
+      : '已取证 ' + lead.completedActionIds.length + ' / 3';
+    return { district, threads, lead, sign };
+  });
+  const { threads: localThreads, lead } = fieldByDistrict.find(({ district }) => district.id === selectedDistrict.id)!;
+  const localReply = streetReply(nightWatch, patrolIndex);
+  const resume = watchResume(nightWatch, hasFinalDispatch);
+  const note = fieldLeads[lead.signal.id];
+  const next = lead.nextAction;
+  const instruction = next ? note.actions[next.id] : undefined;
+  const firstRecord = getCaseFile(lead.signal.id)?.records[0];
+  const readingHere = nearby && next?.type === 'district' ? firstRecord : undefined;
+  const visitLabel = readingHere ? note.record : !next ? (lead.stage === 'sealed' ? note.scan : '重读调查结论')
+    : next.label;
+  const condition = next?.type === 'report' ? '待结案'
+    : { sealed: '待核实', detected: '信号已锁定', corroborated: '取证中', contained: '已结案' }[lead.stage];
+  const observation = next?.type === 'report' ? '三份记录已齐。选出解释现象的判断，用两条独立读数支持它。'
+    : lead.stage === 'contained' ? note.filed : instruction ?? note.observation;
+  const lastRecord = getCaseFile(lead.signal.id)?.records.filter(({ actionId }) => lead.completedActionIds.includes(actionId)).at(-1);
+  const investigateSite = (opener: HTMLElement) => {
+    if (next?.type === 'district' && !nearby) {
+      setMapView(false);
+      setActiveDrawer(null);
+      setNearbyDistrict(selectedDistrict.id);
+      return;
+    }
+    if (next) {
+      focusSignal(lead.signal.id);
+      runInvestigationAction(lead.signal.id, next.id, opener);
+      if (readingHere) setNearbyDistrict(null);
+    } else if (lead.stage === 'sealed') {
+      setOverlay({ type: 'signals', targetId: lead.signal.id, fieldVisit: true, opener });
       playUISound('click');
+    } else {
+      openCase(lead.signal.id, opener);
+    }
+  };
+
+  if (watching) return <NightWatch onExit={() => {
+    navigateTo('field');
+    requestAnimationFrame(() => watchLink.current?.focus());
+  }} />;
+
+  if (!entered) {
+    const finalWorksheet = hasFinalDispatch && !departureDecision;
+    const unexplored = !guidedSignal && hasSignalMemory && !hasFinalDispatch
+      ? (lead.stage === 'sealed' ? lead.signal : SIGNAL_CATALOG.find(signal => !discoveredSignalSet.has(signal.id))) : undefined;
+    const destination = guidedSignal ?? unexplored;
+    const districtId = destination?.districtId;
+    const pendingFile = guidedSignal && getCaseFile(guidedSignal.id);
+    const lastSource = pendingFile?.records.filter(record => nextThread?.completedActionIds.includes(record.actionId)).at(-1);
+    const premise = finalWorksheet ? '五份结论都已归档。零号月台送来一张发车清单，站务员在等你的回电。'
+      : pendingFile ? (lastSource ? '上次查到「' + lastSource.source + '」。' : '') + pendingFile.question
+      : unexplored ? fieldLeads[unexplored.id]?.observation ?? '三环的案卷都已归档。接收器上，还有一个频道没有查清来源。'
+      : undefined;
+    const resumeLead = finalWorksheet ? '零号月台 · 复原发车清单'
+      : guidedSignal ? guidedCase + ' · ' + guidedAction
+      : districtId && unexplored ? fieldSites[districtId].site + ' · ' + fieldLeads[unexplored.id].scan
+      : unexplored ? '观察台 · 监听未记录的频道'
+      : isPastMode ? '初代平台 · 历史档案' : site.site + ' · ' + visitLabel;
+
+    const continueInvestigation = () => {
+      navigateTo('field');
+      if (finalWorksheet) {
+        setOverlay({ type: 'departure', opener: null });
+      } else if (destination && !districtId) {
+        if (guidedSignal) {
+          if (guidedSignal.id !== latestSignal?.id) focusSignal(guidedSignal.id);
+          setOverlay({ type: 'case', signalId: guidedSignal.id, opener: null });
+        } else {
+          setOverlay({ type: 'signals', targetId: destination.id, opener: null });
+        }
+      } else {
+        if (districtId) {
+          visitLiveDistrict(districtId);
+          if (guidedSignal && guidedSignal.id !== latestSignal?.id) focusSignal(guidedSignal.id);
+          setMapView(false);
+          setActivePanel('district');
+        }
+        entryFocus.current = true;
+      }
     };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isCameraOpen, isInterceptorOpen, playUISound]);
-
-  useEffect(() => {
-    if (!latestSignal) return;
-
-    const thread = investigationState.threads[latestSignal.id];
-    if (!thread || thread.stage === 'sealed') return;
-
-    const districtAction = latestSignal.investigation.actions.find((action) => (
-      action.type === 'district' && action.districtId === selectedDistrict.id
-    ));
-
-    if (districtAction && !thread.completedActionIds.includes(districtAction.id)) {
-      completeInvestigationAction(latestSignal.id, districtAction.id);
-    }
-  }, [completeInvestigationAction, investigationState.threads, latestSignal, selectedDistrict.id]);
-
-  useEffect(() => {
-    if (!latestSignal) return;
-
-    const thread = investigationState.threads[latestSignal.id];
-    if (!thread || thread.stage === 'sealed') return;
-
-    const matchingAction = latestSignal.investigation.actions.find((action) => {
-      if (activePanel === 'citizens') return action.type === 'citizens';
-      if (activePanel === 'archive') return action.type === 'archive';
-      if (activePanel === 'systems') return action.id === 'review-systems';
-      return false;
-    });
-
-    if (matchingAction && !thread.completedActionIds.includes(matchingAction.id)) {
-      completeInvestigationAction(latestSignal.id, matchingAction.id);
-    }
-  }, [activePanel, completeInvestigationAction, investigationState.threads, latestSignal]);
-
-  if (!bootComplete) {
-    return <BootSequence onComplete={() => setBootComplete(true)} />;
+    return (
+      <>
+        <TitleScreen replay={replay} nightWatch={nightWatch} locked={discoveredSignalIds.length} filed={filedCount}
+          lead={resumeLead} premise={premise} finished={departureDecision !== null} canPersist={observerMemory.canPersist}
+          onManageSaves={openSaveDesk} onEnter={continueInvestigation} />
+        {overlay?.type === 'save' && <SaveDesk replay={replay} opener={overlay.opener} onClose={closeOverlay} />}
+      </>
+    );
   }
 
   return (
-    <div className={`app-shell observer-shell scanline ${isDay ? 'day-mode' : 'night-mode'} ${isPastMode ? 'temporal-active' : ''}`}>
+    <div className={`app-shell observer-shell ${isDay ? 'day-mode' : 'night-mode'} ${isPastMode ? 'temporal-active' : ''} ${overlay ? 'has-modal' : ''}`}>
       <Starfield />
-      <DataStream />
-      <Particles />
-      <WeatherOverlay condition={weather.current_condition} />
-      <GlitchOverlay />
 
-      <main className="observer-console" aria-label="Yun Shen Chu observer console">
+      <main className="observer-console" aria-label="云深处调查台" tabIndex={-1}>
         <header className="observer-topbar">
           <div className="brand-lockup">
             <button
-              className="round-signal"
+              className="round-signal console-menu"
               type="button"
-              onClick={openInterceptor}
-              title="Open Signal Interceptor"
-              aria-label="Open global signal interceptor"
+              onClick={returnToTitle}
+              title="返回标题画面"
+              aria-label="返回标题画面"
             >
-              <Radio size={16} />
+              <ArrowLeft size={16} aria-hidden="true" />
             </button>
             <div>
-              <h1>{world.city_name}</h1>
-              <p>OBSERVER PROTOCOL / v{world.version} / {isPastMode ? 'FOUNDATION ARCHIVE' : 'LIVE CITY'}</p>
+              <h1 lang="zh-CN">云深处</h1>
+              <p>{replay ? '重玩 · ' : ''}{isPastMode ? '初代历史档案' : '城市调查台'}</p>
+            </div>
+            <div className="brand-controls">
+              <button
+                id="command-palette-trigger"
+                className="command-palette-trigger"
+                type="button"
+                aria-label="打开快捷指令"
+                aria-keyshortcuts="Meta+K Control+K"
+                title="快捷指令（⌘K / Ctrl+K）"
+                onClick={(event) => setOverlay({ type: 'palette', opener: event.currentTarget })}
+              >
+                <Command size={16} aria-hidden="true" />
+              </button>
+              <AudioEngine />
             </div>
           </div>
 
-          <div className="top-metrics">
-            <div className="top-metric">
-              <Zap size={13} />
-              <span>Energy</span>
-              <strong>{world.global_stats.energy_index.toFixed(1)}%</strong>
+          <details className="city-telemetry"><summary><Activity size={15} /> 城市读数</summary>
+            <div className="top-metrics">
+              <div className="top-metric">
+                <Zap size={13} />
+                <span>Energy</span>
+                <strong>{world.global_stats.energy_index.toFixed(1)}%</strong>
+              </div>
+              <div className="top-metric">
+                <Users size={13} />
+                <span>Population</span>
+                <strong>{formatPopulation(world.global_stats.total_population)}</strong>
+              </div>
+              <div className="top-metric">
+                <Layers3 size={13} />
+                <span>Altitude</span>
+                <strong>{world.global_stats.average_altitude}m</strong>
+              </div>
+              <div className="top-metric">
+                <Activity size={13} />
+                <span>Clock</span>
+                <ConsoleClock />
+              </div>
+              <div className={`top-metric signal-pressure-tile level-${signalTelemetry.level}`}>
+                <Radio size={13} />
+                <span>Signal</span>
+                <strong>{signalTelemetry.pressure}% {pressureLabels[signalTelemetry.level]}</strong>
+              </div>
             </div>
-            <div className="top-metric">
-              <Users size={13} />
-              <span>Population</span>
-              <strong>{formatPopulation(world.global_stats.total_population)}</strong>
-            </div>
-            <div className="top-metric">
-              <Compass size={13} />
-              <span>Altitude</span>
-              <strong>{world.global_stats.average_altitude}m</strong>
-            </div>
-            <div className="top-metric">
-              <Activity size={13} />
-              <span>Clock</span>
-              <strong>{clockLabel}</strong>
-            </div>
-            <div className={`top-metric signal-pressure-tile level-${signalTelemetry.level}`}>
-              <Radio size={13} />
-              <span>Signal</span>
-              <strong>{signalTelemetry.pressure}% {signalTelemetry.level}</strong>
-            </div>
-          </div>
+          </details>
+          <span className="header-progress"><BookOpen size={15} /> 已结案 <b>{filedCount} / {SIGNAL_CATALOG.length}</b></span>
         </header>
 
-        <aside className="district-rail" aria-label="District navigation">
-          <div className="rail-label"><MapPin size={13} /> Districts</div>
-          {currentDistricts.map((district) => (
-            <button
-              key={district.id}
+        <nav className="district-rail" aria-label="城区选择">
+          {fieldByDistrict.map(({ district, sign }) => (
+            <button key={district.id} type="button" aria-pressed={selectedDistrict.id === district.id}
               className={`rail-district ${selectedDistrict.id === district.id ? 'active' : ''}`}
-              type="button"
-              onClick={() => setDistrict(district.id)}
-              aria-pressed={selectedDistrict.id === district.id}
-            >
-              <span className="rail-dot" />
-              <span>
-                <strong>{district.name}</strong>
-                <small>{district.altitude_range[0]}-{district.altitude_range[1]}m</small>
-              </span>
+              onClick={() => {
+                if (!isPastMode) visitLiveDistrict(district.id);
+                setActivePanel('district');
+                setMapView(false);
+                setNearbyDistrict(null);
+                setActiveDrawer(null);
+              }}>
+              {!isPastMode && <img src={fieldSites[district.id].image} alt="" />}
+              <span><strong>{district.name}</strong><small>{isPastMode ? '初代施工中' : sign}</small></span>
             </button>
           ))}
-        </aside>
+        </nav>
 
-        <section className="city-window" aria-label="Interactive cloud city viewport">
-          <TrafficVisualization />
-          <Map3D />
-
-          <div className="window-toolbar">
-            <TemporalToggle />
-            <button className="control-btn glow-on-hover" type="button" onClick={openCamera}>
-              <Camera size={16} />
-              Camera
-            </button>
-            <button className={`control-btn glow-on-hover signal-launch ${hasSignalMemory ? '' : 'is-awaiting'}`} type="button" onClick={openInterceptor}>
-              <AudioLines size={16} />
-              {hasSignalMemory ? 'Signals' : 'Start'}
-            </button>
-          </div>
-
-          <div className="city-readout">
-            <span className="id-tag">{selectedDistrict.id.toUpperCase()}</span>
-            <h2>{selectedDistrict.name}</h2>
-            <p>{getDistrictInsight(selectedDistrict.id)}</p>
-            <div className="readout-meta">
-              <span>X {selectedDistrict.coordinates.x}</span>
-              <span>Y {selectedDistrict.coordinates.y}</span>
-              <span>Z {selectedDistrict.coordinates.z}</span>
+        <section className={`city-window ${showMap ? 'view-map' : 'view-exterior'}`} data-district={selectedDistrict.id} data-distance={nearby ? 'near' : 'far'} aria-label="城区观景窗">
+          <div className="scene-frame">
+            {showMap ? <>
+              <TrafficVisualization paused={overlay !== null} />
+              <Map3D />
+            </> : <>
+              <ScenePhoto src={shownPhoto.image} alt={shownPhoto.alt} />
+              <button type="button" className="scene-waypoint" aria-pressed={nearby} aria-label={nearby ? '回到远景' : site.nearby.invite}
+                onClick={() => {
+                  setNearbyDistrict(nearby ? null : selectedDistrict.id);
+                  playUISound('click');
+                }}>
+                <span className="waypoint-lens" aria-hidden="true">{nearby ? <ArrowLeft size={15} /> : <Eye size={15} />}</span>
+                <span className="waypoint-name">{nearby ? '回到远景' : site.nearby.invite}</span>
+              </button>
+            </>}
+            {isPastMode ? <div className="vcr-filter" aria-hidden="true" /> : <>
+              <WeatherOverlay condition={weather.current_condition} />
+              <Particles />
+            </>}
+            <div className="scene-caption">
+              <GlitchOverlay />
+              <span>{isPastMode ? 'YEAR 01' : site.englishName} / {selectedDistrict.coordinates.z.toLocaleString()} m</span>
+              <h2>{isPastMode ? '初代定居平台' : nearby ? site.nearby.name : site.site}</h2>
             </div>
-          </div>
-
-          {latestSignal && (
-            <div className={`signal-echo echo-${latestSignal.mapFocus}`}>
-              <span>{latestSignal.freq.toFixed(1)} MHz</span>
-              <strong>{latestSignal.title}</strong>
+            <div className="window-toolbar">
+              {!isPastMode && activeDrawer !== 'terminal' && (
+                <button className="control-btn map-toggle" aria-pressed={showMap} aria-label={showMap ? '查看城区外景' : '查看城区地图'} title={showMap ? '查看城区外景' : '查看城区地图'} type="button" onClick={() => { setMapView(!mapView); setNearbyDistrict(null); }}>
+                  <Layers3 size={16} aria-hidden="true" /> <span>{showMap ? '外景' : '地图'}</span>
+                </button>
+              )}
+              <TemporalToggle />
+              <button className="control-btn camera-launch glow-on-hover" type="button" aria-label="查看城区监控" title="查看城区监控" onClick={(event) => openCamera(event.currentTarget)}>
+                <Camera size={16} />
+                <span>监控</span>
+              </button>
+              <button id="signal-toolbar-trigger" className="control-btn glow-on-hover signal-launch" type="button" aria-label="全城信号接收器" title="全城信号接收器" onClick={(event) => openInterceptor(event.currentTarget)}>
+                <AudioLines size={16} />
+                <span>信号</span>
+              </button>
             </div>
-          )}
 
-          <div className={`anomaly-badge state-${anomalyState.toLowerCase()}`}>
-            <AlertTriangle size={15} />
-            <span>{anomalyState}</span>
           </div>
-
-          {!hasSignalMemory && (
-            <div className="launch-brief" aria-label="First signal sweep brief">
-              <div className="launch-brief-kicker">
-                <Sparkles size={14} />
-                <span>First Sweep</span>
+          {isPastMode ? (
+            <div className="site-observation"><div><small>Year 01 · 历史记录</small><h3>初代平台施工中</h3>
+              <p>{selectedDistrict.description}</p></div>
+              <button type="button" className="site-primary" onClick={toggleTemporalView}>返回实时城区 <ArrowRight size={17} /></button>
+            </div>
+          ) : (
+            <div className="site-observation" data-lead={lead.signal.id} data-stage={lead.stage}>
+              <div aria-live="polite" aria-atomic="true">
+                <small><span className="site-lamp" />{condition} · {selectedDistrict.name}</small>
+                <h3>{caseNames[lead.signal.id]}</h3>
+                {nearby && lead.stage !== 'contained' && !readingHere ? (
+                  <blockquote className="local-fragment"><cite>{note.source}</cite>{note.fragment}</blockquote>
+                ) : readingHere ? (
+                  <blockquote className="local-fragment"><cite>{readingHere.time} · {note.sourceLabel}</cite>
+                    {note.reading}
+                  </blockquote>
+                ) : <p>{observation}</p>}
               </div>
-              <strong>Signal memory is empty</strong>
-              <p>The interceptor is standing by for the first sealed anomaly thread.</p>
-              <div className="launch-brief-grid">
-                <span>{SIGNAL_CATALOG.length} sealed threads</span>
-                <span>local memory ready</span>
-                <span>{selectedDistrict.name} online</span>
-              </div>
-              <button type="button" onClick={openInterceptor}>
-                <Radio size={14} />
-                Start signal sweep
+              <button type="button" className="site-primary" onClick={(event) => investigateSite(event.currentTarget)}>
+                {visitLabel}<ArrowRight size={17} aria-hidden="true" />
               </button>
             </div>
           )}
         </section>
 
-        <aside className="inspector-panel" aria-label="Context inspector">
-          <div className="panel-tabs" role="tablist" aria-label="Inspector panels">
-            {panelOptions.map((option) => {
+        <aside className="inspector-panel" aria-label="调查手册">
+          <div className="panel-tabs" role="tablist" aria-label="手册栏目">
+            {panelOptions.map((option, index) => {
               const Icon = option.icon;
               return (
                 <button
@@ -428,7 +736,9 @@ function App() {
                   aria-selected={activePanel === option.id}
                   aria-controls={`inspector-panel-${option.id}`}
                   className={activePanel === option.id ? 'active' : ''}
-                  onClick={() => setActivePanel(option.id)}
+                  tabIndex={activePanel === option.id ? 0 : -1}
+                  onClick={event => { revealPinnedTabs(event.currentTarget); setActivePanel(option.id); }}
+                  onKeyDown={(event) => handlePanelKeys(event, index)}
                 >
                   <Icon size={14} />
                   {option.label}
@@ -438,179 +748,249 @@ function App() {
           </div>
 
           {activePanel === 'district' && (
-            <div className="panel-body" id="inspector-panel-district" role="tabpanel" aria-labelledby="inspector-tab-district">
-              <div className="panel-heading">
-                <span>Selected Layer</span>
-                <strong>{selectedDistrict.visual_style}</strong>
-              </div>
-              <p className="panel-copy">{selectedDistrict.description}</p>
-
-              <div className="operation-grid">
-                <div>
-                  <Landmark size={16} />
-                  <span>Altitude Band</span>
-                  <strong>{altitudeRange}m</strong>
-                </div>
-                <div>
-                  <Users size={16} />
-                  <span>District Load</span>
-                  <strong>{formatPopulation(selectedDistrict.population)}</strong>
-                </div>
-                <div>
-                  <Shield size={16} />
-                  <span>Security</span>
-                  <strong>{selectedDistrict.security_level ?? world.global_stats.status}</strong>
-                </div>
-                <div>
-                  <Route size={16} />
-                  <span>Network</span>
-                  <strong>{currentDistricts.length} sectors</strong>
-                </div>
-                <div>
-                  <Radio size={16} />
-                  <span>Local Echoes</span>
-                  <strong>{localSignalCount} locked</strong>
-                </div>
-              </div>
-
-              <div className="social-grid">
-                {socialMetrics.map((metric) => (
-                  <div key={metric.key} className="metric-chip">
-                    <span>{metric.label}</span>
-                    <div className="metric-track">
-                      <div className="metric-fill" style={{ width: `${metric.value}%` }} />
-                    </div>
-                    <strong>{metric.value}%</strong>
+            <div className="panel-body" id="inspector-panel-district" role="tabpanel" aria-labelledby="inspector-tab-district" tabIndex={0}>
+              <section className="site-notebook">
+                <small>{isPastMode ? 'YEAR 01' : site.englishName} / 现场簿</small>
+                <h2>{isPastMode ? '初代平台记录' : selectedDistrict.name}</h2>
+                <p>{selectedDistrict.description}</p>
+                {!isPastMode && <div className="site-reports">
+                  {localThreads.map(({ signal, stage, completedActionIds }) => (
+                    <button key={signal.id} type="button" onClick={(event) => openCase(signal.id, event.currentTarget)}>
+                      <span>{caseNames[signal.id]}</span>
+                      <small>{stage === 'contained' ? '结论已归档' : stage === 'sealed' ? '待核实' : `${completedActionIds.length} / 3 份记录`}</small>
+                      <ArrowRight size={15} />
+                    </button>
+                  ))}
+                </div>}
+                {!isPastMode && lastRecord && <blockquote><cite>{lastRecord.time} · {lastRecord.source}</cite>{lastRecord.readings[0].value}</blockquote>}
+                {!observerMemory.canPersist && <p className="launch-brief" role="status">本次调查仅保存在此页，可在存档管理中下载备份。</p>}
+                {!isPastMode && localReply && <blockquote className="watch-city-letter">
+                  <cite>{watchSites[patrolIndex].keeper} · {localReply.title}</cite>
+                  {localReply.reply}
+                </blockquote>}
+                {!isPastMode && !localReply && completedWorks > 0 && <blockquote className="watch-city-letter">
+                  <cite>{watchSites[patrolIndex].keeper} · {watchSites[patrolIndex].works[completedWorks - 1]}</cite>
+                  {watchSites[patrolIndex].letters[completedWorks - 1]}
+                </blockquote>}
+                {!isPastMode && <a ref={watchLink} className="watch-entry" href="#watch">
+                  <Moon size={18} /><span><strong>值夜巡查</strong>
+                    <small>{nightWatch ? resume.label + ' · ' + resume.detail : resume.detail}</small></span>
+                  <ArrowRight size={15} />
+                </a>}
+              </section>
+              <nav className="case-rail" aria-label="Investigation cases">
+                <div className="rail-label"><BookOpen size={13} aria-hidden="true" /> 其他案卷</div>
+                <ul>
+                  {SIGNAL_CATALOG.filter((signal) => isPastMode || signal.districtId !== selectedDistrict.id).map((signal) => {
+                    const stage = investigationState.threads[signal.id]?.stage ?? 'sealed';
+                    const active = nextThread?.signal.id === signal.id && stage !== 'contained';
+                    const Status = stage === 'contained' ? CheckCircle : stage === 'sealed' ? LockKeyhole : Radio;
+                    return <li key={signal.id}>
+                      <button className={`case-rail-link stage-${stage}`} type="button" aria-current={active ? 'step' : undefined}
+                        onClick={(event) => openCase(signal.id, event.currentTarget)}>
+                        <Status size={13} aria-hidden="true" /><span>{caseNames[signal.id]}</span><small>{stage === 'sealed' ? '未锁定' : stage === 'contained' ? '已归档' : '进行中'}</small>
+                      </button>
+                    </li>;
+                  })}
+                </ul>
+              </nav>
+              {hasFinalDispatch && <button className="notebook-ending" type="button"
+                onClick={(event) => setOverlay({ type: 'departure', opener: event.currentTarget })}>
+                <BookOpen size={16} />{departureDecision ? '重读调度回执' : '复原 Q-17 发车清单'}<ArrowRight size={16} />
+              </button>}
+              <details className="site-details"><summary>城区资料与遥测</summary>
+                <div className="operation-grid">
+                  <div>
+                    <Landmark size={16} />
+                    <span>海拔区间</span>
+                    <strong>{altitudeRange}m</strong>
                   </div>
-                ))}
-              </div>
-
-              <div className="landmark-list">
-                <h3>Key Landmarks</h3>
-                {selectedDistrict.landmarks.map((landmark) => (
-                  <div key={`${landmark.name}-${landmark.type}`} className="landmark-row">
-                    <span className={`status-indicator ${getStatusClass(landmark.status)}`} />
-                    <div>
-                      <strong>{landmark.name}</strong>
-                      <small>{landmark.type} / {landmark.status}</small>
-                    </div>
+                  <div>
+                    <Users size={16} />
+                    <span>城区人口</span>
+                    <strong>{formatPopulation(selectedDistrict.population)}</strong>
                   </div>
-                ))}
-              </div>
+                  <div>
+                    <Shield size={16} />
+                    <span>防护等级</span>
+                    <strong>{selectedDistrict.security_level ?? world.global_stats.status}</strong>
+                  </div>
+                  <div>
+                    <Radio size={16} />
+                    <span>本地回波</span>
+                    <strong>已锁定 {localSignalCount}</strong>
+                  </div>
+                </div>
+
+                <div className="social-grid">
+                  {socialMetrics.map((metric) => (
+                    <div key={metric.key} className="metric-chip">
+                      <span>{metric.label}</span>
+                      <div className="metric-track">
+                        <div className="metric-fill" style={{ width: `${metric.value}%` }} />
+                      </div>
+                      <strong>{metric.value}%</strong>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="landmark-list">
+                  <h3>城区地标</h3>
+                  {selectedDistrict.landmarks.map((landmark) => (
+                    <div key={`${landmark.name}-${landmark.type}`} className="landmark-row">
+                      <span className={`status-indicator ${getStatusClass(landmark.status)}`} />
+                      <div>
+                        <strong>{landmark.name}</strong>
+                        <small>{landmark.type} / {landmark.status}</small>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </details>
             </div>
           )}
 
           {activePanel === 'systems' && (
             <div className="panel-body compact-panel" id="inspector-panel-systems" role="tabpanel" aria-labelledby="inspector-tab-systems">
               <div className="weather-matrix">
-                <div><Cloud size={16} /><span>Weather</span><strong>{weather.current_condition}</strong></div>
-                <div><Route size={16} /><span>Routes</span><strong>{world.traffic_system.active_routes}</strong></div>
-                <div><Gauge size={16} /><span>Directive</span><strong>{activeDirective}</strong></div>
-                <div><Radio size={16} /><span>Signal Pressure</span><strong>{signalTelemetry.pressure}% / {signalTelemetry.level}</strong></div>
+                <div><Cloud size={16} /><span>天气</span><strong>{weatherLabels[weather.current_condition] ?? weather.current_condition}</strong></div>
+                <div><Route size={16} /><span>航线</span><strong>{world.traffic_system.active_routes}</strong></div>
+                <div><Gauge size={16} /><span>当班指令</span><strong>{activeDirective}</strong></div>
+                <div><Radio size={16} /><span>信号压力</span><strong>{signalTelemetry.pressure}% / {pressureLabels[signalTelemetry.level]}</strong></div>
               </div>
               <div className="observer-memory-console">
                 <div className="memory-console-header">
                   <Database size={16} />
-                  <span>Observer Memory</span>
-                  <strong>{observerMemory.canPersist ? 'persistent' : 'volatile'}</strong>
+                  <span>本机存档</span>
+                  <strong>{observerMemory.canPersist ? '自动保存' : '仅此页'}</strong>
                 </div>
+                <button type="button" className="field-case-link field-save-link" onClick={(event) => openSaveDesk(event.currentTarget)}>
+                  管理存档 <ArrowRight size={14} aria-hidden="true" />
+                </button>
                 <div className="memory-stat-grid">
                   <div>
-                    <span>Signals</span>
+                    <span>已锁定信号</span>
                     <strong>{observerMemory.discoveredCount}/{SIGNAL_CATALOG.length}</strong>
                   </div>
                   <div>
-                    <span>Diary</span>
+                    <span>日记</span>
                     <strong>{observerMemory.diaryCount}/{observerMemory.diaryLimit}</strong>
                   </div>
                   <div>
-                    <span>Restore</span>
-                    <strong>{observerMemory.restored ? 'yes' : 'no'}</strong>
+                    <span>本次载入</span>
+                    <strong>{observerMemory.restored ? '已有记录' : '新记录'}</strong>
                   </div>
                   <div>
-                    <span>Persist Cap</span>
+                    <span>可保存日记</span>
                     <strong>{observerMemory.persistedDiaryLimit}</strong>
                   </div>
                 </div>
               </div>
-              <div className={`next-action-console stage-${latestInvestigationThread?.stage ?? 'sealed'}`}>
+              <div className={`next-action-console stage-${nextThread?.stage ?? 'sealed'}`}>
                 <div className="next-action-header">
                   <CheckCircle size={16} />
-                  <span>Next Action</span>
-                  <strong>{latestInvestigationThread?.stage ?? 'sealed'}</strong>
+                  <span>下一步行动</span>
+                  <strong>{stageLabels[nextThread?.stage ?? 'sealed']}</strong>
                 </div>
                 {nextInvestigationAction ? (
                   <>
-                    <p>{nextInvestigationAction.action.description}</p>
+                    <p><strong>{nextInvestigationAction.signal.title}</strong><br />{nextInvestigationAction.action.description}</p>
                     <button
                       type="button"
-                      onClick={() => runInvestigationAction(nextInvestigationAction.signal.id, nextInvestigationAction.action.id)}
+                      onClick={(event) => runInvestigationAction(nextInvestigationAction.signal.id, nextInvestigationAction.action.id, event.currentTarget)}
                     >
                       {nextInvestigationAction.action.label}
                     </button>
                   </>
                 ) : (
-                  <p>{latestInvestigationThread ? latestInvestigationThread.stageText : 'Lock a signal to begin anomaly investigation.'}</p>
+                  <p>{latestInvestigationThread ? latestInvestigationThread.stageText : '从现场或接收器锁定一段信号，即可开始取证。'}</p>
                 )}
               </div>
               <div className={`resonance-console level-${signalTelemetry.level}`}>
                 <div className="resonance-header">
-                  <span>Resonance Matrix</span>
-                  <strong>{signalTelemetry.unresolvedCount} sealed threads</strong>
+                  <span>信号共振</span>
+                  <strong>{signalTelemetry.unresolvedCount} 个信号待锁定</strong>
                 </div>
                 <div className="resonance-track" aria-label={`Signal pressure ${signalTelemetry.pressure}%`}>
                   <span style={{ width: `${signalTelemetry.pressure}%` }} />
                 </div>
                 <p>{signalTelemetry.nextLead}</p>
                 <div className="impact-list">
-                  {signalTelemetry.activeImpacts.length ? signalTelemetry.activeImpacts.map((impact) => (
-                    <span key={impact}>{impact}</span>
-                  )) : <span>No active anomaly impact. Passive listening only.</span>}
+                  {signalTelemetry.activeImpacts.length ? signalTelemetry.activeImpacts.map((signal) => (
+                    <button key={signal.id} type="button" onClick={() => focusSignal(signal.id)} aria-pressed={latestSignal?.id === signal.id}>
+                      <strong>{signal.title}</strong>
+                      <span>{signal.impact}</span>
+                    </button>
+                  )) : <span>暂无异常影响，接收器正在监听。</span>}
                 </div>
               </div>
+              <SystemAlerts />
               <EconomyDashboard />
             </div>
           )}
 
           {activePanel === 'archive' && (
             <div className="panel-body compact-panel" id="inspector-panel-archive" role="tabpanel" aria-labelledby="inspector-tab-archive">
+              {hasFinalDispatch && (
+                <button className="archive-case-link archive-departure-link" type="button" onClick={(event) => setOverlay({ type: 'departure', opener: event.currentTarget })}>
+                  查看联合调度单
+                </button>
+              )}
               <div className="archive-banner">
                 <History size={16} />
                 <div>
-                  <span>Forbidden Depths / {discoveryProgress}% resolved</span>
-                  <strong>{latestSignal ? latestSignal.evidence : 'Evidence is revealed by signal, not by menu.'}</strong>
+                  <span>已锁定 {discoveredSignalIds.length}/{SIGNAL_CATALOG.length} 个信号 · 已归档 {filedCount} 起</span>
+                  <strong>{latestSignal ? latestSignal.evidence : '打开接收器，沿频段寻找第一份线索。'}</strong>
                 </div>
               </div>
               <div className="evidence-board">
-                <span>Latest Lock</span>
-                <strong>{latestSignal?.title ?? 'No signal locked'}</strong>
-                <small>{latestSignal?.message ?? 'Open the interceptor and sweep the hidden bands.'}</small>
+                <span>最近锁定</span>
+                <strong>{latestSignal ? caseNames[latestSignal.id] : '等待第一段信号'}</strong>
+                <small>{latestSignal?.message ?? '从任一城区的现场也可以开始调查。'}</small>
                 {latestSignal && <em>{latestSignal.containment}</em>}
               </div>
               <div className="lead-board">
-                <span>Next Lead</span>
+                <span>下一条线索</span>
                 <strong>{signalTelemetry.nextLead}</strong>
               </div>
+              {fieldLog.length > 0 && (
+                <details className="field-chronology">
+                  <summary>现场日志 · {fieldLog.length} 条记录</summary>
+                  <ol>
+                    {fieldLog.map(({ record, signal }) => (
+                      <li key={`${signal.id}/${record.actionId}`}>
+                        <button type="button" onClick={(event) => setOverlay({
+                          type: 'case', signalId: signal.id, opener: event.currentTarget,
+                        })}>
+                          <time>{record.time}</time>
+                          <span><strong>{record.source}</strong><small>{caseNames[signal.id]}</small></span>
+                        </button>
+                      </li>
+                    ))}
+                  </ol>
+                </details>
+              )}
               <div className="archive-search-bar">
                 <Search size={14} />
                 <input
                   type="search"
+                  ref={archiveInput}
                   value={archiveQuery}
                   onChange={(event) => setArchiveQuery(event.target.value)}
-                  placeholder="Search archive..."
-                  aria-label="Search archive threads"
+                  placeholder="搜索案名、地区或证据"
+                  aria-label="搜索案卷"
                 />
                 {archiveQuery && (
                   <button
                     type="button"
-                    onClick={() => setArchiveQuery('')}
-                    aria-label="Clear archive search"
+                    onClick={() => { setArchiveQuery(''); archiveInput.current?.focus(); }}
+                    aria-label="清空案卷搜索"
                   >
                     <X size={14} />
                   </button>
                 )}
               </div>
-              <div className="archive-filter-bar" aria-label="Archive signal filters">
+              <div className="archive-filter-bar" aria-label="按信号状态筛选">
                 {archiveFilterOptions.map((option) => (
                   <button
                     key={option.id}
@@ -622,7 +1002,7 @@ function App() {
                     {option.label}
                   </button>
                 ))}
-                <span>{filteredArchiveSignals.length} threads</span>
+                <span>{filteredArchiveSignals.length} 起</span>
               </div>
               <div className="discovery-stack">
                 {filteredArchiveSignals.length ? filteredArchiveSignals.map((card) => {
@@ -637,39 +1017,35 @@ function App() {
                       <button
                         type="button"
                         className="discovery-card-main"
-                        onClick={() => markDiscovery(card.id, card.title)}
-                        aria-label={`Review anomaly thread ${card.title}`}
+                        onClick={(event) => markDiscovery(card.id, card.title, event.currentTarget)}
+                        aria-label={`查阅案卷 · ${caseNames[card.id]}`}
                       >
-                        <span>{isUnlocked ? `${card.freq.toFixed(1)} MHz / ${card.origin}` : 'LOCKED FREQUENCY'}</span>
-                        <strong>{card.title}</strong>
+                        <span>{isUnlocked ? `${card.freq.toFixed(1)} MHz / ${card.origin}` : '频率待锁定'}</span>
+                        <strong>{caseNames[card.id]}</strong>
                         <small>{isUnlocked ? card.evidence : card.lead}</small>
                         {isUnlocked && <em>{card.impact}</em>}
                       </button>
                       {thread && (
                         <div className={`investigation-strip stage-${thread.stage}`}>
                           <div className="investigation-strip-header">
-                            <span>{thread.stage}</span>
-                            <strong>{thread.completedActionIds.length}/{thread.totalActions} actions</strong>
+                            <span>{stageLabels[thread.stage]}</span>
+                            <strong>{thread.completedActionIds.length}/{thread.totalActions} 项</strong>
                           </div>
-                          <div className="investigation-progress" aria-label={`${card.title} investigation progress ${thread.progress}%`}>
+                          <div className="investigation-progress" aria-label={`${caseNames[card.id]}调查进度 ${thread.progress}%`}>
                             <span style={{ width: `${thread.progress}%` }} />
                           </div>
                           {isUnlocked && (
                             <div className="investigation-actions">
-                              {card.investigation.actions.map((action) => {
-                                const isComplete = thread.completedActionIds.includes(action.id);
-                                return (
-                                  <button
-                                    key={action.id}
-                                    type="button"
-                                    className={isComplete ? 'complete' : ''}
-                                    onClick={() => runInvestigationAction(card.id, action.id)}
-                                    disabled={isComplete}
-                                  >
-                                    {isComplete ? 'done' : action.label}
-                                  </button>
-                                );
-                              })}
+                              {thread.nextAction && thread.nextAction.type !== 'report' && (
+                                <button type="button" onClick={(event) => {
+                                  if (thread.nextAction) runInvestigationAction(card.id, thread.nextAction.id, event.currentTarget);
+                                }}>
+                                  {thread.nextAction.label}
+                                </button>
+                              )}
+                              <button type="button" className="archive-case-link" onClick={(event) => setOverlay({ type: 'case', signalId: card.id, opener: event.currentTarget })}>
+                                {thread.stage === 'contained' ? '重读调查结论' : '翻开案卷'}
+                              </button>
                             </div>
                           )}
                           <p>{thread.stageText}</p>
@@ -680,8 +1056,8 @@ function App() {
                 }) : (
                   <div className="archive-empty-state">
                     <Search size={18} />
-                    <strong>No matching threads</strong>
-                    <span>{archiveQuery ? archiveQuery : archiveFilter}</span>
+                    <strong>没有符合条件的案卷</strong>
+                    <span>{archiveQuery ? '试试其他案名或地区' : '可切换上方的状态筛选'}</span>
                   </div>
                 )}
               </div>
@@ -696,16 +1072,16 @@ function App() {
           )}
         </aside>
 
-        <section className={`signal-strip ${nextInvestigationAction ? 'has-next-action' : ''}`} aria-label="Anomaly signal strip">
+        <section className={`signal-strip ${nextInvestigationAction || hasFinalDispatch ? 'has-next-action' : ''}`} aria-label="调查快捷操作">
           <div>
             <Sparkles size={15} />
-            <span>Active Directive</span>
+            <span>城市指令</span>
             <strong>{activeDirective}</strong>
           </div>
           <button
             type="button"
-            className={`strip-scan-action ${hasSignalMemory ? '' : 'is-awaiting'}`}
-            onClick={openInterceptor}
+            id="field-scan" className={`strip-scan-action ${hasSignalMemory ? '' : 'is-awaiting'}`}
+            onClick={(event) => openInterceptor(event.currentTarget)}
             aria-label={scanActionLabel}
           >
             <Radio size={15} />
@@ -714,33 +1090,73 @@ function App() {
           {nextInvestigationAction && (
             <button
               type="button"
-              className="strip-next-action"
-              onClick={() => runInvestigationAction(nextInvestigationAction.signal.id, nextInvestigationAction.action.id)}
-              aria-label={`Run next investigation action ${nextInvestigationAction.action.label}`}
+              id="field-next-action" className="strip-next-action"
+              onClick={(event) => runInvestigationAction(nextInvestigationAction.signal.id, nextInvestigationAction.action.id, event.currentTarget)}
+              aria-label={guidedCase + '，' + guidedAction}
             >
-              <CheckCircle size={15} />
-              <span>Next Action</span>
-              <strong>{nextInvestigationAction.action.label}</strong>
+              <Route size={16} aria-hidden="true" />
+              <small>{guidedCase}</small>
+              <strong>{guidedAction}</strong>
+            </button>
+          )}
+          {hasFinalDispatch && (
+            <button id="field-dispatch" type="button" className="strip-dispatch" onClick={(event) => setOverlay({ type: 'departure', opener: event.currentTarget })}>
+              <BookOpen size={15} aria-hidden="true" /> {departureDecision ? '重读结局' : '打开最终调度单'}
+              <ArrowRight size={15} aria-hidden="true" />
             </button>
           )}
           <div>
             <Radio size={15} />
-            <span>Signal Memory</span>
-            <strong>{hasSignalMemory ? `${signalTelemetry.pressure}% ${latestSignal?.title ?? 'locked'}` : weather.current_condition}</strong>
+            <span>已结案</span>
+            <strong>{filedCount}/{SIGNAL_CATALOG.length}</strong>
           </div>
         </section>
       </main>
 
-      <SystemAlerts />
-      <ObserverDiary />
-      <DeepTerminal />
-      <AudioEngine />
-      <SecurityCamera isActive={isCameraOpen} onClose={() => setIsCameraOpen(false)} />
-      {isInterceptorOpen && <SignalInterceptor onClose={() => setIsInterceptorOpen(false)} />}
-      {isPastMode && <div className="vcr-filter" aria-hidden="true" />}
-      {isPastMode && <div className="vcr-noise" aria-hidden="true" />}
+      <ObserverDiary isOpen={activeDrawer === 'diary'} onOpenChange={(open) => setActiveDrawer(open ? 'diary' : null)} />
+      <DeepTerminal isOpen={activeDrawer === 'terminal'} onOpenChange={(open) => setActiveDrawer(open ? 'terminal' : null)} />
+      {overlay?.type === 'camera' && <SecurityCamera opener={overlay.opener} onClose={closeOverlay} />}
+      {overlay?.type === 'signals' && <SignalInterceptor opener={overlay.opener} targetId={overlay.targetId} onClose={closeOverlay}
+        siteName={overlay.fieldVisit ? site.nearby.name : undefined}
+        onReturnToSite={() => {
+          setNearbyDistrict(selectedDistrict.id);
+          closeOverlay();
+        }}
+        onInvestigate={(id) => {
+          focusSignal(id);
+          setOverlay({ type: 'case', signalId: id, opener: overlay.opener });
+        }} />}
+      {overlay?.type === 'palette' && <CommandPalette opener={overlay.opener} onClose={closeOverlay} onSelect={runConsoleCommand} />}
+      {overlay?.type === 'case' && (
+        <CaseDesk key={overlay.signalId} signalId={overlay.signalId} opener={overlay.opener} onClose={closeOverlay}
+          onOpenInstrument={(actionId, practice) => setOverlay({
+            type: 'capture', signalId: overlay.signalId, opener: overlay.opener, actionId, practice, returnToCase: true,
+          })}
+          onContinue={(actionId) => {
+            closeOverlay();
+            runInvestigationAction(overlay.signalId, actionId, overlay.opener);
+          }}
+        />
+      )}
+      {overlay?.type === 'capture' && (
+        <InstrumentWorkbench key={overlay.signalId} signalId={overlay.signalId} actionId={overlay.actionId}
+          opener={overlay.opener} practice={overlay.practice} returnToCase={overlay.returnToCase} onClose={overlay.returnToCase
+            ? () => setOverlay({ type: 'case', signalId: overlay.signalId, opener: overlay.opener })
+            : closeOverlay}
+        />
+      )}
+      {overlay?.type === 'departure' && <DepartureFile opener={overlay.opener} onClose={closeOverlay} />}
+      {overlay?.type === 'save' && <SaveDesk replay={replay} opener={overlay.opener} onClose={closeOverlay} />}
     </div>
   );
 }
 
-export default App;
+export default function App({ replay }: { replay: boolean }) {
+  const screen = useSyncExternalStore(subscribeRoute, currentScreen);
+
+  return (
+    <CityProvider initialDistrict={savedFieldView()?.district} storageKey={replay ? REPLAY_STORAGE_KEY : undefined} observing={screen !== 'title'}>
+      <ObserverConsole replay={replay} screen={screen} />
+    </CityProvider>
+  );
+}

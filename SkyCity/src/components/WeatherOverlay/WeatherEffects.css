@@ -58,14 +58,11 @@
 }
 
 @keyframes boltFlicker {
-  0%, 95%, 100% { opacity: 0; transform: scaleX(0); }
-  96% { opacity: 1; transform: scaleX(1); }
-  97% { opacity: 0; }
-  98% { opacity: 1; }
+  0%, 90%, 100% { opacity: 0; }
+  94% { opacity: .35; }
 }
 
 @keyframes stormVignette {
-  0%, 100% { opacity: 0.3; }
-  95% { opacity: 0.8; }
-  96% { opacity: 0.2; }
+  0%, 100% { opacity: .2; }
+  65% { opacity: .42; }
 }

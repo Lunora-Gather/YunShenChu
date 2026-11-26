@@ -25,7 +25,7 @@
     "trade_volume": 1250000
   },
   "active_directives": [
-    "Maintain Altitude Stability",
-    "Maximize Harvester Efficiency"
+    "维持三环航道高度",
+    "提高采集站产能"
   ]
 }

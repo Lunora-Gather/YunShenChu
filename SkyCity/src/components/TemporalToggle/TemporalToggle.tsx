@@ -9,12 +9,12 @@ const TemporalToggle: React.FC = () => {
     <button 
       className={`control-btn ${isPastMode ? 'temporal-active-btn' : 'glow-on-hover'}`}
       onClick={toggleTemporalView}
-      title="Temporal View: Year 01"
+      title={isPastMode ? '返回实时城区' : '查看初代城区'}
       type="button"
       aria-pressed={isPastMode}
     >
       {isPastMode ? <ZapOff size={16} /> : <History size={16} />}
-      {isPastMode ? "LIVE" : "YEAR 01"}
+      {isPastMode ? '实时' : '初代'}
     </button>
   );
 };
